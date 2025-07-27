@@ -306,4 +306,20 @@ mod tests {
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 4 });
         assert!(chip.v[0x1] == 1);
     }
+
+    #[test]
+    fn test_run_op_clr() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+
+        chip.screen[0][0] = 0xFF;
+        chip.screen[10][5] = 0x0F;
+        chip.v[0xF] = 1;
+
+        chip.run_op(ChipOp::Cls);
+
+        assert!(chip.screen.iter().all(|row| row.iter().all(|&b| b == 0)));
+    }
 }

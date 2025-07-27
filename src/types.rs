@@ -172,7 +172,7 @@ impl Chip8 {
         use ChipOp::*;
         match op {
             Cls => {
-                // TODO: Clear
+                self.screen.fill([0; W]);
                 self.pc += 2;
             }
             Ret => {
