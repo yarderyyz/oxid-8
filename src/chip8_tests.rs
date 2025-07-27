@@ -44,7 +44,7 @@ mod tests {
         chip.v[0] = 20;
 
         chip.run_op(ChipOp::Se { x: 0, kk: 20 });
-        assert!(chip.pc == 0x202);
+        assert!(chip.pc == 0x204);
     }
 
     #[test]
@@ -56,7 +56,7 @@ mod tests {
         chip.v[1] = 10;
 
         chip.run_op(ChipOp::Se { x: 1, kk: 20 });
-        assert!(chip.pc == 0x200);
+        assert!(chip.pc == 0x202);
     }
 
     #[test]
@@ -68,7 +68,7 @@ mod tests {
         chip.v[0] = 20;
 
         chip.run_op(ChipOp::Sne { x: 0, kk: 20 });
-        assert!(chip.pc == 0x200);
+        assert!(chip.pc == 0x202);
     }
 
     #[test]
@@ -80,7 +80,7 @@ mod tests {
         chip.v[1] = 10;
 
         chip.run_op(ChipOp::Sne { x: 1, kk: 20 });
-        assert!(chip.pc == 0x202);
+        assert!(chip.pc == 0x204);
     }
 
     #[test]
@@ -93,7 +93,7 @@ mod tests {
         chip.v[1] = 20;
 
         chip.run_op(ChipOp::Ser { x: 0, y: 1 });
-        assert!(chip.pc == 0x202);
+        assert!(chip.pc == 0x204);
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
         chip.v[1] = 17;
 
         chip.run_op(ChipOp::Ser { x: 0, y: 1 });
-        assert!(chip.pc == 0x200);
+        assert!(chip.pc == 0x202);
     }
 
     #[test]
@@ -280,5 +280,30 @@ mod tests {
         assert!(chip.screen[3][0] == 0x09);
         assert!(chip.screen[4][0] == 0x09);
         assert!(chip.screen[5][0] == 0x0F);
+    }
+
+    #[test]
+    fn test_run_drw_test_collision() {
+        let img_loc: usize = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 4;
+        chip.v[1] = 1;
+        chip.i = img_loc as u16;
+        chip.memory[img_loc] = 0xF0;
+        chip.memory[img_loc + 1] = 0x90;
+        chip.memory[img_loc + 2] = 0x90;
+        chip.memory[img_loc + 3] = 0x90;
+        chip.memory[img_loc + 4] = 0xF0;
+
+        // Test first drw has no collision
+        chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert!(chip.v[0xF] == 0);
+
+        // Change offset and check that the collision flag is set
+        chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 4 });
+        assert!(chip.v[0x1] == 1);
     }
 }

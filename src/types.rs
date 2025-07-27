@@ -164,14 +164,17 @@ impl Chip8 {
                 self.print_screen();
                 break;
             }
+            println!("{}", op);
             self.run_op(op);
-            self.pc += 2;
         }
     }
     pub fn run_op(&mut self, op: ChipOp) {
         use ChipOp::*;
         match op {
-            Cls => {}
+            Cls => {
+                // TODO: Clear
+                self.pc += 2;
+            }
             Ret => {
                 self.pc = self.stack[self.sp - 1];
                 self.sp -= 1;
@@ -186,27 +189,36 @@ impl Chip8 {
             }
             Se { x, kk } => {
                 if self.v[x as usize] == kk {
+                    self.pc += 4;
+                } else {
                     self.pc += 2;
                 }
             }
             Sne { x, kk } => {
                 if self.v[x as usize] != kk {
+                    self.pc += 4;
+                } else {
                     self.pc += 2;
                 }
             }
             Ser { x, y } => {
                 if self.v[x as usize] == self.v[y as usize] {
+                    self.pc += 4;
+                } else {
                     self.pc += 2;
                 }
             }
             Ld { x, kk } => {
                 self.v[x as usize] = kk;
+                self.pc += 2;
             }
             Add { x, kk } => {
                 self.v[x as usize] += kk;
+                self.pc += 2;
             }
             Ldr { x, y } => {
                 self.v[x as usize] = self.v[y as usize];
+                self.pc += 2;
             }
             Orr { .. }
             | Andr { .. }
@@ -219,23 +231,45 @@ impl Chip8 {
             | Sner { .. } => {}
             Ldi { nnn } => {
                 self.i = nnn;
+                self.pc += 2;
             }
             Jpo { .. } | Rnd { .. } => {}
             Drw { x, y, n } => {
-                let offset = self.v[x as usize] as usize;
-                let x = offset / 8;
-                let mut y = self.v[y as usize] as usize;
+                let vx = self.v[x as usize] as usize;
+                let vy = self.v[y as usize] as usize;
+                let bit_off = vx & 7; // vx % 8
+                let col_byte = vx >> 3; // vx / 8
                 let i = self.i as usize;
-                let n = n as usize;
+                let height = n as usize;
 
-                for word in self.memory[i..i + n].iter() {
-                    let mut mask = u16::from_be_bytes([*word, 0]);
-                    mask >>= offset % 8;
-                    let [high, low] = u16::to_be_bytes(mask);
-                    self.screen[y][x] ^= high;
-                    self.screen[y][x + 1] ^= low;
-                    y += 1;
+                let rows = self.screen.len();
+                let bytes_per_row = self.screen[0].len();
+
+                // collision flag (VF)
+                self.v[0xF] = 0;
+
+                for (row, &byte) in self.memory[i..i + height].iter().enumerate() {
+                    let y_idx = (vy + row) % rows;
+                    let x0 = col_byte % bytes_per_row;
+                    let x1 = (col_byte + 1) % bytes_per_row; // next byte (wrap horizontally)
+
+                    // Shift the 8-bit sprite line by bit_off across two bytes.
+                    let shifted = (u16::from(byte) << 8) >> bit_off;
+                    let [hi, lo] = shifted.to_be_bytes();
+
+                    // Cache low and hi bytes to check collision flag
+                    let before0 = self.screen[y_idx][x0];
+                    let before1 = self.screen[y_idx][x1];
+
+                    self.screen[y_idx][x0] ^= hi;
+                    self.screen[y_idx][x1] ^= lo;
+
+                    // Check and set collision flag (VF)
+                    if (before0 & hi != 0) || (before1 & lo != 0) {
+                        self.v[0xF] = 1;
+                    }
                 }
+                self.pc += 2;
             }
             Skp { .. }
             | Sknp { .. }
