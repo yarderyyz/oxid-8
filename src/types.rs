@@ -195,29 +195,32 @@ impl Chip8 {
                 }
             }
             Sne { x, kk } => {
-                if self.v[x as usize] != kk {
+                if *self.vx(x) != kk {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
                 }
             }
             Ser { x, y } => {
-                if self.v[x as usize] == self.v[y as usize] {
+                if *self.vx(x) == *self.vx(y) {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
                 }
             }
             Ld { x, kk } => {
-                self.v[x as usize] = kk;
+                *self.vx(x) = kk;
                 self.pc += 2;
             }
             Add { x, kk } => {
-                self.v[x as usize] += kk;
+                let r = self.vx(x);
+                *r = r.wrapping_add(kk);
                 self.pc += 2;
             }
             Ldr { x, y } => {
-                self.v[x as usize] = self.v[y as usize];
+                let vy = *self.vx(y);
+                let vx = self.vx(x);
+                *vx = vy;
                 self.pc += 2;
             }
             Orr { .. }
@@ -375,5 +378,10 @@ impl Chip8 {
             }
             _ => ChipOp::Unknown(op),
         }
+    }
+
+    #[inline]
+    fn vx(&mut self, x: u8) -> &mut u8 {
+        &mut self.v[x as usize]
     }
 }
