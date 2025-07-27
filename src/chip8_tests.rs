@@ -28,7 +28,10 @@ mod tests {
     #[test]
     fn test_run_op_call() {
         let addr = 0xABC;
-        let mut chip: Chip8 = Default::default();
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
 
         chip.run_op(ChipOp::Call { nnn: addr });
         assert!(chip.sp == 1);
@@ -118,6 +121,7 @@ mod tests {
         };
 
         chip.run_op(ChipOp::Ld { x: reg, kk: 0xAB });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.v[reg as usize] == 0xAB);
     }
 
@@ -130,9 +134,11 @@ mod tests {
         };
 
         chip.run_op(ChipOp::Add { x: reg, kk: 0xA0 });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.v[reg as usize] == 0xA0);
 
         chip.run_op(ChipOp::Add { x: reg, kk: 0x0B });
+        assert_eq!(chip.pc, 0x204);
         assert!(chip.v[reg as usize] == 0xAB);
     }
 
@@ -147,6 +153,7 @@ mod tests {
         chip.v[y as usize] = 0xAB;
 
         chip.run_op(ChipOp::Ldr { x, y });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.v[x as usize] == 0xAB);
     }
 
@@ -162,6 +169,7 @@ mod tests {
         chip.i = img_loc;
         chip.memory[img_loc as usize] = 0xAB;
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0xAB);
     }
 
@@ -177,7 +185,7 @@ mod tests {
         chip.i = img_loc;
         chip.memory[img_loc as usize] = 0b11110000;
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 1 });
-        println!("{:#010b}", chip.screen[0][0]);
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0b01111000);
     }
 
@@ -193,6 +201,7 @@ mod tests {
         chip.i = img_loc;
         chip.memory[img_loc as usize] = 0b11110000;
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0b00000011);
         assert!(chip.screen[0][1] == 0b11000000);
     }
@@ -209,6 +218,7 @@ mod tests {
         chip.i = img_loc;
         chip.memory[img_loc as usize] = 0b11110000;
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][1] == 0b00000111);
         assert!(chip.screen[0][2] == 0b10000000);
     }
@@ -229,6 +239,7 @@ mod tests {
         chip.memory[img_loc + 3] = 0x90;
         chip.memory[img_loc + 4] = 0xF0;
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0xF0);
         assert!(chip.screen[1][0] == 0x90);
         assert!(chip.screen[2][0] == 0x90);
@@ -252,6 +263,7 @@ mod tests {
         chip.memory[img_loc + 3] = 0x90;
         chip.memory[img_loc + 4] = 0xF0;
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[1][0] == 0xF0);
         assert!(chip.screen[2][0] == 0x90);
         assert!(chip.screen[3][0] == 0x90);
@@ -275,6 +287,7 @@ mod tests {
         chip.memory[img_loc + 3] = 0x90;
         chip.memory[img_loc + 4] = 0xF0;
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[1][0] == 0x0F);
         assert!(chip.screen[2][0] == 0x09);
         assert!(chip.screen[3][0] == 0x09);
@@ -301,10 +314,12 @@ mod tests {
         // Test first drw has no collision
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 5 });
         assert!(chip.v[0xF] == 0);
+        assert_eq!(chip.pc, 0x202);
 
         // Change offset and check that the collision flag is set
         chip.run_op(ChipOp::Drw { x: 0, y: 1, n: 4 });
         assert!(chip.v[0x1] == 1);
+        assert_eq!(chip.pc, 0x204);
     }
 
     #[test]
@@ -319,6 +334,7 @@ mod tests {
         chip.v[0xF] = 1;
 
         chip.run_op(ChipOp::Cls);
+        assert_eq!(chip.pc, 0x202);
 
         assert!(chip.screen.iter().all(|row| row.iter().all(|&b| b == 0)));
     }
