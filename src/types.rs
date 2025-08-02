@@ -154,18 +154,17 @@ impl Chip8 {
             println!();
         }
     }
-    pub fn run(&mut self) {
+    pub fn run_step(&mut self) {
+        let pc = self.pc as usize;
+        let b = self.memory[pc];
+        let s = self.memory[pc + 1];
+        let op = Chip8::parseop(u16::from_be_bytes([b, s]));
+        self.run_op(op);
+    }
+    pub fn run<F: Fn(&Chip8)>(&mut self, render: F) {
         loop {
-            let pc = self.pc as usize;
-            let b = self.memory[pc];
-            let s = self.memory[pc + 1];
-            let op = Chip8::parseop(u16::from_be_bytes([b, s]));
-            if let ChipOp::Jp { .. } = op {
-                self.print_screen();
-                break;
-            }
-            println!("{}", op);
-            self.run_op(op);
+            self.run_step();
+            render(self);
         }
     }
     pub fn run_op(&mut self, op: ChipOp) {
