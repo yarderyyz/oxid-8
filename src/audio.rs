@@ -1,7 +1,28 @@
+use cpal::traits::StreamTrait;
+
 use std::f32::consts::PI;
 
 use color_eyre::eyre::{bail, eyre, Result};
 use cpal::traits::{DeviceTrait, HostTrait};
+
+pub struct Beeper {
+    pub stream: cpal::Stream,
+}
+
+impl Beeper {
+    pub fn new() -> color_eyre::Result<Self> {
+        Ok(Self {
+            stream: super::audio::setup()?,
+        })
+    }
+    pub fn set(&self, on: bool) {
+        if on {
+            let _ = self.stream.play();
+        } else {
+            let _ = self.stream.pause();
+        };
+    }
+}
 
 pub fn setup() -> Result<cpal::Stream> {
     let host = cpal::default_host();

@@ -1,5 +1,7 @@
 use clap::Parser;
+use cpal::traits::StreamTrait;
 
+use oxid8::audio::Beeper;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 use std::fs::File;
@@ -9,15 +11,13 @@ use std::time::Duration;
 use oxid8::consts::PROGRAM_START;
 use oxid8::consts::RAM_SIZE;
 use oxid8::cpu::Chip8;
-use oxid8::gfx;
+use oxid8::{gfx, timers};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
     #[arg(short, long)]
     rom: String,
-    #[arg(short, long)]
-    print: bool,
     #[arg(short, long)]
     debug: bool,
 }
@@ -69,23 +69,11 @@ fn main() -> color_eyre::Result<()> {
         panic!("Failed to load rom");
     }
 
-    if args.print {
-        chip.memory[PROGRAM_START..PROGRAM_START + 100]
-            .chunks(2)
-            .for_each(|bs| {
-                println!("{}", Chip8::parseop(u16::from_be_bytes([bs[0], bs[1]])));
-            });
-        return Ok(());
-    }
-
     tui::install_panic_hook();
     let mut terminal = tui::init_terminal()?;
 
-    {
-        // Run a thread to decrement timers
-    }
-
-    chip.start_counters();
+    let beeper = Beeper::new().unwrap();
+    let rx = timers::spawn_timers(chip.dt.clone(), chip.st.clone());
 
     while model.running_state != RunningState::Done {
         chip.run_step();
@@ -106,6 +94,15 @@ fn main() -> color_eyre::Result<()> {
                 }
             }
             current_msg = update(&mut model, current_msg.unwrap());
+        }
+
+        // Play sounds
+        while let Ok(on) = rx.try_recv() {
+            if on {
+                let _ = beeper.stream.play();
+            } else {
+                let _ = beeper.stream.pause();
+            };
         }
     }
 

@@ -8,6 +8,7 @@ use ratatui::{style::Color, Frame};
 
 use crate::consts::{PROGRAM_START, WINDOW};
 use crate::cpu::Chip8;
+use crate::decode::decode;
 
 pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
     // ── split the screen ────────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
             } else {
                 let b = c8.memory[addr];
                 let s = c8.memory[addr + 1];
-                let op = Chip8::parseop(u16::from_be_bytes([b, s]));
+                let op = decode(u16::from_be_bytes([b, s]));
                 Row::new(vec![
                     format!("0x{addr:03X}"),
                     format!("{op}"),
