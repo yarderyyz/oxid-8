@@ -1,3 +1,5 @@
+use random_number::random;
+
 use std::fmt;
 use std::sync::{
     atomic::{AtomicU8, Ordering},
@@ -93,7 +95,7 @@ pub enum ChipOp {
     Sner { x: usize, y: usize },
     Ldi { nnn: usize },
     Jpo { nnn: u16 },
-    Rnd { x: u8, kk: u8 },
+    Rnd { x: usize, kk: u8 },
     Drw { x: usize, y: usize, n: u8 },
     Skp { x: usize },
     Sknp { x: usize },
@@ -376,8 +378,14 @@ impl Chip8 {
                 self.i = nnn;
                 self.pc += 2;
             }
-            Jpo { .. } => panic!("Jpo not implemented"),
-            Rnd { .. } => panic!("Rnd not implemented"),
+            Jpo { nnn } => {
+                self.pc = (nnn + (*self.vx(0) as u16)) as usize;
+            }
+            Rnd { x, kk } => {
+                let n: u8 = random!();
+                *self.vx(x) = n & kk;
+                self.pc += 2;
+            }
             Drw { x, y, n } => {
                 let vx = *self.vx(x) as usize;
                 let vy = *self.vx(y) as usize;
@@ -458,13 +466,22 @@ impl Chip8 {
                     }
                 }
             },
-            Ldsv { .. } => panic!("Ldsv not implemented"),
+            Ldsv { x } => {
+                let val = *self.vx(x);
+                self.st.store(val, Ordering::Release);
+                self.pc += 2;
+            }
             Addi { x } => {
                 let vx = *self.vx(x);
                 self.i += vx as usize;
                 self.pc += 2;
             }
-            Ldfv { .. } => panic!("Ldfv not implemented"),
+            Ldfv { x } => {
+                // set I to the 5 line high hex sprite for the lowest nibble in vX
+                let vx = *self.vx(x) & 0x0F;
+                self.i = (vx * 5) as usize;
+                self.pc += 2;
+            }
             Ldbv { x } => {
                 let vx = *self.vx(x);
                 self.memory[self.i] = (vx % 255) / 100;
@@ -553,7 +570,7 @@ impl Chip8 {
             },
             0xB000 => ChipOp::Jpo { nnn: op & 0x0FFF },
             0xC000 => ChipOp::Rnd {
-                x: ((op & 0x0F00) >> 8) as u8,
+                x: ((op & 0x0F00) >> 8) as usize,
                 kk: (op & 0x00FF) as u8,
             },
             0xD000 => ChipOp::Drw {
