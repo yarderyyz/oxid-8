@@ -98,11 +98,7 @@ fn main() -> color_eyre::Result<()> {
 
         // Play sounds
         while let Ok(on) = rx.try_recv() {
-            if on {
-                let _ = beeper.stream.play();
-            } else {
-                let _ = beeper.stream.pause();
-            };
+            beeper.set(on);
         }
     }
 

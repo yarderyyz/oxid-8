@@ -67,6 +67,7 @@ pub fn setup() -> Result<cpal::Stream> {
         )?,
         other => bail!("Unsupported sample format: {other:?}"),
     };
+    let _ = stream.pause();
 
     Ok(stream)
 }
