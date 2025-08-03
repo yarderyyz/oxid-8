@@ -6,9 +6,8 @@ use ratatui::text::Span;
 use ratatui::widgets::{Block, Borders, Row, Table};
 use ratatui::{style::Color, Frame};
 
-use crate::types::Chip8;
-use crate::types::PROGRAM_START;
-use crate::types::WINDOW;
+use crate::consts::{PROGRAM_START, WINDOW};
+use crate::cpu::Chip8;
 
 pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
     // ── split the screen ────────────────────────────────────────────────────────

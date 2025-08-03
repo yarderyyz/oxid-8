@@ -1,205 +1,18 @@
+use cpal::traits::StreamTrait;
+
 use random_number::random;
 
-use std::fmt;
-use std::sync::{
-    atomic::{AtomicU8, Ordering},
-    Arc,
-};
-/*
-*   Memory Map:
-*   +---------------+= 0xFFF (4095) End of Chip-8 RAM
-*   |               |
-*   |               |
-*   |               |
-*   |               |
-*   |               |
-*   | 0x200 to 0xFFF|
-*   |     Chip-8    |
-*   | Program / Data|
-*   |     Space     |
-*   |               |
-*   |               |
-*   |               |
-*   +- - - - - - - -+= 0x600 (1536) Start of ETI 660 Chip-8 programs
-*   |               |
-*   |               |
-*   |               |
-*   +---------------+= 0x200 (512) Start of most Chip-8 programs
-*   | 0x000 to 0x1FF|
-*   | Reserved for  |
-*   |  interpreter  |
-*   +---------------+= 0x000 (0) Start of Chip-8 RAM
-*
-*/
-pub const CHIP8_FONTSET: [u8; 80] = [
-    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-    0x20, 0x60, 0x20, 0x20, 0x70, // 1
-    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
-];
+use std::sync::{atomic::AtomicU8, atomic::Ordering, Arc};
+use std::thread;
+use std::thread::sleep;
+use std::time::Duration;
 
-pub const RAM_SIZE: usize = 4096;
-pub const PROGRAM_START: usize = 0x200;
-pub const WINDOW: isize = 8;
+use crate::audio;
+use crate::mem::Memory;
+use crate::op::ChipOp;
 
-pub struct Memory(pub [u8; RAM_SIZE]);
-impl Default for Memory {
-    fn default() -> Self {
-        Self([0; RAM_SIZE])
-    }
-}
-impl std::ops::Deref for Memory {
-    type Target = [u8];
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl std::ops::DerefMut for Memory {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum ChipOp {
-    Cls,
-    Ret,
-    Jp { nnn: usize },
-    Call { nnn: usize },
-    Se { x: usize, kk: u8 },
-    Sne { x: usize, kk: u8 },
-    Ser { x: usize, y: usize },
-    Ld { x: usize, kk: u8 },
-    Add { x: usize, kk: u8 },
-    Ldr { x: usize, y: usize },
-    Orr { x: usize, y: usize },
-    Andr { x: usize, y: usize },
-    Xorr { x: usize, y: usize },
-    Addr { x: usize, y: usize },
-    Subr { x: usize, y: usize },
-    Shrr { x: usize, y: usize },
-    Subnr { x: usize, y: usize },
-    Shlr { x: usize, y: usize },
-    Sner { x: usize, y: usize },
-    Ldi { nnn: usize },
-    Jpo { nnn: u16 },
-    Rnd { x: usize, kk: u8 },
-    Drw { x: usize, y: usize, n: u8 },
-    Skp { x: usize },
-    Sknp { x: usize },
-    Lddv { x: usize },
-    Ldk { x: usize },
-    Ldvd { x: usize },
-    Ldsv { x: usize },
-    Addi { x: usize },
-    Ldfv { x: usize },
-    Ldbv { x: usize },
-    Ldiv { x: usize },
-    Ldvi { x: usize },
-    Unknown(u16),
-}
-
-impl fmt::Debug for ChipOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ChipOp::*;
-        let name = match self {
-            Cls => "Cls",
-            Ret => "Ret",
-            Jp { .. } => "Jp",
-            Call { .. } => "Call",
-            Se { .. } => "Se",
-            Sne { .. } => "Sne",
-            Ser { .. } => "Ser",
-            Ld { .. } => "Ld",
-            Add { .. } => "Add",
-            Ldr { .. } => "Ldr",
-            Orr { .. } => "Orr",
-            Andr { .. } => "Andr",
-            Xorr { .. } => "Xorr",
-            Addr { .. } => "Addr",
-            Subr { .. } => "Subr",
-            Shrr { .. } => "Shrr",
-            Subnr { .. } => "Subnr",
-            Shlr { .. } => "Shlr",
-            Sner { .. } => "Sner",
-            Ldi { .. } => "Ldi",
-            Jpo { .. } => "Jpo",
-            Rnd { .. } => "Rnd",
-            Drw { .. } => "Drw",
-            Skp { .. } => "Skp",
-            Sknp { .. } => "Sknp",
-            Lddv { .. } => "Lddv",
-            Ldk { .. } => "Ldk",
-            Ldvd { .. } => "Ldvd",
-            Ldsv { .. } => "Ldsv",
-            Addi { .. } => "Addi",
-            Ldfv { .. } => "Ldfv",
-            Ldbv { .. } => "Ldbv",
-            Ldiv { .. } => "Ldiv",
-            Ldvi { .. } => "Ldvi",
-            Unknown(_) => "Unknown",
-        };
-        f.write_str(name)
-    }
-}
-
-impl fmt::Display for ChipOp {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ChipOp::*;
-        match *self {
-            Cls => write!(f, "CLS"),
-            Ret => write!(f, "RET"),
-            Jp { nnn } => write!(f, "JP {nnn:#05X}"),
-            Call { nnn } => write!(f, "CALL {nnn:#05X}"),
-            Se { x, kk } => write!(f, "SE V{x:X}, {kk:#04X}"),
-            Sne { x, kk } => write!(f, "SNE V{x:X}, {kk:#04X}"),
-            Ser { x, y } => write!(f, "SE V{x:X}, V{y:X}"),
-            Ld { x, kk } => write!(f, "LD V{x:X}, {kk:#04X}"),
-            Add { x, kk } => write!(f, "ADD V{x:X}, {kk:#04X}"),
-            Ldr { x, y } => write!(f, "LD V{x:X}, V{y:X}"),
-            Orr { x, y } => write!(f, "OR V{x:X}, V{y:X}"),
-            Andr { x, y } => write!(f, "AND V{x:X}, V{y:X}"),
-            Xorr { x, y } => write!(f, "XOR V{x:X}, V{y:X}"),
-            Addr { x, y } => write!(f, "ADD V{x:X}, V{y:X}"),
-            Subr { x, y } => write!(f, "SUB V{x:X}, V{y:X}"),
-            Shrr { x, y } => write!(f, "SHR V{x:X}, V{y:X}"),
-            Subnr { x, y } => write!(f, "SUBN V{x:X}, V{y:X}"),
-            Shlr { x, y } => write!(f, "SHL V{x:X}, V{y:X}"),
-            Sner { x, y } => write!(f, "SNE V{x:X}, V{y:X}"),
-            Ldi { nnn } => write!(f, "LD I, {nnn:#05X}"),
-            Jpo { nnn } => write!(f, "JP V0, {nnn:#05X}"),
-            Rnd { x, kk } => write!(f, "RND V{x:X}, {kk:#04X}"),
-            Drw { x, y, n } => write!(f, "DRW V{x:X}, V{y:X}, {n:#X}"),
-            Skp { x } => write!(f, "SKP V{x:X}"),
-            Sknp { x } => write!(f, "SKNP V{x:X}"),
-            Lddv { x } => write!(f, "LD V{x:X}, DT"),
-            Ldk { x } => write!(f, "LD V{x:X}, K"),
-            Ldvd { x } => write!(f, "LD DT, V{x:X}"),
-            Ldsv { x } => write!(f, "LD ST, V{x:X}"),
-            Addi { x } => write!(f, "ADD I, V{x:X}"),
-            Ldfv { x } => write!(f, "LD F, V{x:X}"),
-            Ldbv { x } => write!(f, "LD B, V{x:X}"),
-            Ldiv { x } => write!(f, "LD [I], V{x:X}"),
-            Ldvi { x } => write!(f, "LD V{x:X}, [I]"),
-            Unknown(op) => write!(f, "DB {op:#06X}"),
-        }
-    }
-}
-
-const W: usize = 8;
-const H: usize = 32;
+use crate::consts::W;
+use crate::consts::{CHIP8_FONTSET, H};
 
 #[derive(Default)]
 pub enum KeyState {
@@ -208,7 +21,6 @@ pub enum KeyState {
     AwaitingRelease,
 }
 
-#[allow(dead_code)]
 #[derive(Default)]
 pub struct Chip8 {
     pub pc: usize,         // Program counter
@@ -230,14 +42,6 @@ impl Chip8 {
         let base = 0x0;
         self.memory[base..base + CHIP8_FONTSET.len()].copy_from_slice(&CHIP8_FONTSET);
     }
-    pub fn print_screen(&self) {
-        for y in 0..H {
-            for x in 0..W {
-                print!("{:08b}", self.screen[y][x]);
-            }
-            println!();
-        }
-    }
     pub fn press_key(&mut self, key: u8) {
         self.keys[key as usize] = true;
     }
@@ -252,12 +56,50 @@ impl Chip8 {
             self.run_op(op);
         }
     }
-    pub fn run<F: Fn(&Chip8)>(&mut self, render: F) {
-        loop {
-            self.run_step();
-            render(self);
-        }
+    pub fn start_counters(&self) {
+        let dt = self.dt.clone();
+        let st = self.dt.clone();
+
+        let mut sounding = false;
+        thread::spawn(move || {
+            let stream = audio::setup().unwrap();
+            loop {
+                let _ = dt.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+                    if v > 0 {
+                        Some(v - 1)
+                    } else {
+                        None
+                    }
+                });
+                let _ = st.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+                    if v > 0 {
+                        Some(v - 1)
+                    } else {
+                        None
+                    }
+                });
+
+                let st_now = st.load(Ordering::Acquire);
+                if st_now > 0 && !sounding {
+                    let _ = stream.play();
+                    print!("sounding");
+                    sounding = true;
+                } else if st_now == 0 && sounding {
+                    let _ = stream.pause();
+                    sounding = false;
+                }
+                sleep(Duration::from_secs_f64(1.0 / 60.0));
+            }
+        });
     }
+
+    // pub fn run<F: Fn(&Chip8)>(&mut self, render: F) {
+    //     loop {
+    //         self.run_step();
+    //         render(self);
+    //     }
+    // }
+
     pub fn run_op(&mut self, op: ChipOp) {
         use ChipOp::*;
         match op {

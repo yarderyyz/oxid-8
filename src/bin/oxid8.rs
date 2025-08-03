@@ -1,21 +1,15 @@
 use clap::Parser;
 
-use cpal::traits::StreamTrait;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 use std::fs::File;
 use std::io::{self, Read};
-use std::sync::atomic::Ordering;
-use std::thread;
-use std::thread::sleep;
 use std::time::Duration;
 
-use crate::types::Chip8;
-
-mod audio;
-mod chip8_tests;
-mod gfx;
-mod types;
+use oxid8::consts::PROGRAM_START;
+use oxid8::consts::RAM_SIZE;
+use oxid8::cpu::Chip8;
+use oxid8::gfx;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -27,9 +21,6 @@ struct Args {
     #[arg(short, long)]
     debug: bool,
 }
-
-const RAM_SIZE: usize = types::RAM_SIZE;
-const PROGRAM_START: usize = types::PROGRAM_START;
 
 fn load_rom(filename: &str, memory: &mut [u8]) -> io::Result<()> {
     let mut file = File::open(filename)?;
@@ -92,36 +83,9 @@ fn main() -> color_eyre::Result<()> {
 
     {
         // Run a thread to decrement timers
-        let dt = chip.dt.clone();
-        let st = chip.dt.clone();
-        thread::spawn(move || {
-            let stream = audio::setup().unwrap();
-            loop {
-                let _ = dt.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
-                    if v > 0 {
-                        Some(v - 1)
-                    } else {
-                        None
-                    }
-                });
-                let _ = st.fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
-                    if v > 0 {
-                        Some(v - 1)
-                    } else {
-                        None
-                    }
-                });
-
-                let st_now = st.load(Ordering::Acquire);
-                if st_now > 0 {
-                    let _ = stream.play();
-                } else {
-                    let _ = stream.pause();
-                }
-                sleep(Duration::from_secs_f64(1.0 / 60.0));
-            }
-        });
     }
+
+    chip.start_counters();
 
     while model.running_state != RunningState::Done {
         chip.run_step();
