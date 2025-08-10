@@ -7,7 +7,7 @@ use ratatui::widgets::{Block, Borders, Row, Table};
 use ratatui::{style::Color, Frame};
 
 use crate::consts::{PROGRAM_START, WINDOW};
-use crate::cpu::Chip8;
+use crate::cpu::{Chip8, KeyState, Screen};
 use crate::decode::decode;
 
 pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
@@ -88,7 +88,14 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
             Row::new(
                 row.iter()
                     .map(|(lbl, code)| {
-                        Span::styled(*lbl, if c8.keys[*code as usize] { on } else { off })
+                        Span::styled(
+                            *lbl,
+                            if c8.keys[*code as usize] != KeyState::AwaitingPress {
+                                on
+                            } else {
+                                off
+                            },
+                        )
                     })
                     .collect::<Vec<_>>(),
             )
@@ -143,7 +150,7 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
     f.render_widget(cmd_table, chunks[2]);
 }
 
-pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
+pub fn view(screen: &Screen, frame: &mut Frame, debug: bool) {
     let main_area = frame.area();
 
     let [left_area, right_area] =
@@ -153,15 +160,15 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
     let inner_left = outer_left_block.inner(left_area);
 
     frame.render_widget(outer_left_block, left_area);
-    if debug {
-        render_chip8_debug(frame, right_area, chip);
-    }
+    // if debug {
+    //     render_chip8_debug(frame, right_area, chip);
+    // }
 
     let buf = frame.buffer_mut();
     for y in 0..16 {
         for x in 0..8 {
-            let mut fg = chip.screen[y * 2][x];
-            let mut bg = chip.screen[(y * 2) + 1][x];
+            let mut fg = screen[y * 2][x];
+            let mut bg = screen[(y * 2) + 1][x];
 
             let x_buf = (x * 8) as u16 + inner_left.x;
             let y_buf = y as u16 + inner_left.y;
@@ -169,13 +176,13 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
             for bit in 0..8 {
                 if let Some(cell) = buf.cell_mut((x_buf + (8 - bit), y_buf)) {
                     cell.set_symbol("▀");
-                    cell.set_fg(Color::Black);
-                    cell.set_bg(Color::Black);
+                    cell.set_fg(Color::LightMagenta);
+                    cell.set_bg(Color::LightMagenta);
                     if fg & 0x1 == 0x1 {
-                        cell.set_fg(Color::White);
+                        cell.set_fg(Color::Blue);
                     }
                     if bg & 0x1 == 0x1 {
-                        cell.set_bg(Color::White);
+                        cell.set_bg(Color::Blue);
                     }
                 }
                 fg >>= 1;

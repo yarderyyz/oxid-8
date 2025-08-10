@@ -1,16 +1,17 @@
 use clap::Parser;
-use cpal::traits::StreamTrait;
 
 use oxid8::audio::Beeper;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 
 use std::fs::File;
 use std::io::{self, Read};
+use std::sync::mpsc;
+use std::thread;
 use std::time::Duration;
 
 use oxid8::consts::PROGRAM_START;
 use oxid8::consts::RAM_SIZE;
-use oxid8::cpu::Chip8;
+use oxid8::cpu::{BufChannel, Chip8};
 use oxid8::{gfx, timers};
 
 #[derive(Parser, Debug)]
@@ -73,33 +74,58 @@ fn main() -> color_eyre::Result<()> {
     let mut terminal = tui::init_terminal()?;
 
     let beeper = Beeper::new().unwrap();
-    let rx = timers::spawn_timers(chip.dt.clone(), chip.st.clone());
+    let timer_rx = timers::spawn_timers(chip.dt.clone(), chip.st.clone());
+
+    // Setup async rendering thread using a BufChannel for communication.
+    let (mut buf_tx, buf_rx) = BufChannel::new();
+    thread::spawn(move || loop {
+        while let Ok(screen) = buf_rx.try_recv() {
+            if let Ok(screen) = screen.read() {
+                // Render the current view
+                terminal
+                    .draw(|f| gfx::view(&screen, f, args.debug))
+                    .unwrap();
+            }
+        }
+        thread::sleep(Duration::from_nanos(16_666_667)); // ~60 Hz
+    });
+
+    let (input_tx, input_rx) = mpsc::channel::<Message>();
+    thread::spawn(move || loop {
+        // Handle events and map to a Message
+        let message = if let Event::Key(key) = event::read().unwrap() {
+            handle_key(key)
+        } else {
+            None
+        };
+        if let Some(message) = message {
+            input_tx.send(message).unwrap();
+        }
+
+        thread::sleep(Duration::from_nanos(16_666_667)); // ~60 Hz
+    });
 
     while model.running_state != RunningState::Done {
         chip.run_step();
 
-        // Render the current view
-        terminal.draw(|f| gfx::view(&chip, f, args.debug))?;
+        buf_tx.send(&chip.screen);
 
-        // Handle events and map to a Message
-        let mut current_msg = handle_event(&model)?;
-
-        // Process updates as long as they return a non-None message
-        while current_msg.is_some() {
-            if let Some(msg) = current_msg {
-                match msg {
-                    Message::KeyDown(key) => chip.press_key(key),
-                    Message::KeyUp(key) => chip.release_key(key),
-                    _ => {}
-                }
+        // Run input
+        while let Ok(message) = input_rx.try_recv() {
+            match message {
+                Message::KeyDown(key) => chip.press_key(key),
+                Message::KeyUp(key) => chip.release_key(key),
+                _ => {}
             }
-            current_msg = update(&mut model, current_msg.unwrap());
+            update(&mut model, message);
         }
 
         // Play sounds
-        while let Ok(on) = rx.try_recv() {
+        while let Ok(on) = timer_rx.try_recv() {
             beeper.set(on);
         }
+
+        thread::sleep(Duration::from_millis(2)); // 500 Hz
     }
 
     tui::restore_terminal()?;
@@ -126,19 +152,6 @@ fn chip8_key_of_char(c: char) -> Option<u8> {
         'v' | 'V' => Some(0xF),
         _ => None,
     }
-}
-
-/// Convert Event to Message
-///
-/// TODO: Make event handling async into a cue - for now this is the system
-///       Frequency lol
-fn handle_event(_: &Model) -> color_eyre::Result<Option<Message>> {
-    if event::poll(Duration::from_millis(2))? {
-        if let Event::Key(key) = event::read()? {
-            return Ok(handle_key(key));
-        }
-    }
-    Ok(None)
 }
 
 fn handle_key(key: event::KeyEvent) -> Option<Message> {

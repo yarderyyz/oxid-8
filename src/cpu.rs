@@ -3,16 +3,60 @@ use random_number::random;
 use crate::decode::decode;
 use crate::mem::Memory;
 use crate::op::ChipOp;
-use std::sync::{atomic::AtomicU8, atomic::Ordering, Arc};
+use std::sync::{
+    atomic::{AtomicU8, Ordering},
+    mpsc, Arc, RwLock,
+};
 
-use crate::consts::W;
-use crate::consts::{CHIP8_FONTSET, H};
+use crate::consts::{CHIP8_FONTSET, H, W};
 
-#[derive(Default)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub enum KeyState {
     #[default]
     AwaitingPress,
+    RegisteredPress,
     AwaitingRelease,
+    RegisteredRelease,
+}
+pub type Screen = [[u8; W]; H];
+
+type BufRef = Arc<RwLock<Screen>>;
+
+// This is going to be shared between threads so for fun lets
+// try setting this up so there is two screen buffers, one that
+// is written to by the interpreter and another that is used by
+// the render thread.
+pub struct BufChannel {
+    buf: BufRef,
+    tx: mpsc::Sender<BufRef>,
+}
+
+// Thinking about this, because screen in the chip-8 is causal
+// we can't really swap two buffers between a render thread
+// and a "simulation" thread to avoid copies. We could use a
+// mpsc cue directly and copy the screen into new heap allocation
+// push it to the render thread, but I think we can avoid the
+// allocations and just swap between two buffers that we copy the
+// data into. We wont save any copies in this case, but we will save
+// unnecessary heap allocations.
+impl BufChannel {
+    pub fn new() -> (Self, mpsc::Receiver<BufRef>) {
+        let (tx, rx) = mpsc::channel::<BufRef>();
+        (
+            Self {
+                buf: Arc::new(RwLock::new([[0; W]; H])),
+                tx,
+            },
+            rx,
+        )
+    }
+
+    pub fn send(&mut self, buf: &[[u8; W]; H]) {
+        if let Ok(mut channel_buf) = self.buf.try_write() {
+            channel_buf.copy_from_slice(buf);
+            self.tx.send(self.buf.clone()).unwrap();
+        }
+    }
 }
 
 #[derive(Default)]
@@ -23,11 +67,10 @@ pub struct Chip8 {
     pub sp: usize,         // Stack Pointer
     pub dt: Arc<AtomicU8>, // Delay timer
     pub st: Arc<AtomicU8>, // Sound timer
-    pub keys: [bool; 16],
+    pub keys: [KeyState; 16],
     pub stack: [usize; 16],
-    pub screen: [[u8; W]; H],
+    pub screen: Screen,
     pub memory: Memory,
-    pub key_state: KeyState,
     pub last_key: u8,
 }
 
@@ -37,10 +80,10 @@ impl Chip8 {
         self.memory[base..base + CHIP8_FONTSET.len()].copy_from_slice(&CHIP8_FONTSET);
     }
     pub fn press_key(&mut self, key: u8) {
-        self.keys[key as usize] = true;
+        self.keys[key as usize] = KeyState::RegisteredPress;
     }
     pub fn release_key(&mut self, key: u8) {
-        self.keys[key as usize] = false;
+        self.keys[key as usize] = KeyState::AwaitingPress;
     }
     pub fn run_step(&mut self) {
         for _ in 0..8 {
@@ -216,16 +259,20 @@ impl Chip8 {
             }
             Skp { x } => {
                 let vx = *self.vx(x);
-                if self.keys[(vx & 0xF) as usize] {
-                    self.pc += 4
+                let key = &mut self.keys[(vx & 0xF) as usize];
+                if *key == KeyState::RegisteredPress {
+                    self.pc += 4;
+                    *key = KeyState::AwaitingRelease;
                 } else {
                     self.pc += 2
                 }
             }
             Sknp { x } => {
                 let vx = *self.vx(x);
-                if !self.keys[(vx & 0xF) as usize] {
-                    self.pc += 4
+                let key = &mut self.keys[(vx & 0xF) as usize];
+                if *key != KeyState::RegisteredPress {
+                    self.pc += 4;
+                    *key = KeyState::AwaitingRelease;
                 } else {
                     self.pc += 2
                 }
@@ -239,25 +286,17 @@ impl Chip8 {
                 *self.vx(x) = self.dt.load(Ordering::Acquire);
                 self.pc += 2;
             }
-            Ldvd { x } => match self.key_state {
-                KeyState::AwaitingPress => {
-                    for (key, pressed) in self.keys.into_iter().enumerate() {
-                        if pressed {
-                            self.key_state = KeyState::AwaitingRelease;
-                            self.last_key = key as u8;
-                            break;
-                        }
-                    }
-                }
-                KeyState::AwaitingRelease => {
-                    let all_clear = self.keys.iter().all(|&k| !k);
-                    if all_clear {
-                        self.key_state = KeyState::AwaitingPress;
+            Ldvd { x } => {
+                let all_clear = self.keys.iter().all(|&k| k == KeyState::AwaitingPress);
+                for (key, key_state) in self.keys.into_iter().enumerate() {
+                    if key_state == KeyState::AwaitingPress {
+                        self.last_key = key as u8;
+                    } else if key_state == KeyState::AwaitingRelease && all_clear {
                         *self.vx(x) = self.last_key;
                         self.pc += 2;
                     }
                 }
-            },
+            }
             Ldsv { x } => {
                 let val = *self.vx(x);
                 self.st.store(val, Ordering::Release);
