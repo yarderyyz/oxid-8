@@ -7,7 +7,7 @@ use ratatui::widgets::{Block, Borders, Row, Table};
 use ratatui::{style::Color, Frame};
 
 use crate::consts::{PROGRAM_START, WINDOW};
-use crate::cpu::{Chip8, KeyState, Screen};
+use crate::cpu::{Chip8, Screen};
 use crate::decode::decode;
 
 pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
@@ -88,14 +88,7 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
             Row::new(
                 row.iter()
                     .map(|(lbl, code)| {
-                        Span::styled(
-                            *lbl,
-                            if c8.keys[*code as usize] != KeyState::AwaitingPress {
-                                on
-                            } else {
-                                off
-                            },
-                        )
+                        Span::styled(*lbl, if c8.keys[*code as usize] { on } else { off })
                     })
                     .collect::<Vec<_>>(),
             )

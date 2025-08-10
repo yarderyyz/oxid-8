@@ -1,8 +1,8 @@
 use random_number::random;
 
-use crate::decode::decode;
 use crate::mem::Memory;
 use crate::op::ChipOp;
+use crate::{consts::PROGRAM_START, decode::decode};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     mpsc, Arc, RwLock,
@@ -10,13 +10,11 @@ use std::sync::{
 
 use crate::consts::{CHIP8_FONTSET, H, W};
 
-#[derive(Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
 pub enum KeyState {
     #[default]
     AwaitingPress,
-    RegisteredPress,
     AwaitingRelease,
-    RegisteredRelease,
 }
 pub type Screen = [[u8; W]; H];
 
@@ -51,7 +49,7 @@ impl BufChannel {
         )
     }
 
-    pub fn send(&mut self, buf: &[[u8; W]; H]) {
+    pub fn send(&mut self, buf: &Screen) {
         if let Ok(mut channel_buf) = self.buf.try_write() {
             channel_buf.copy_from_slice(buf);
             self.tx.send(self.buf.clone()).unwrap();
@@ -67,23 +65,30 @@ pub struct Chip8 {
     pub sp: usize,         // Stack Pointer
     pub dt: Arc<AtomicU8>, // Delay timer
     pub st: Arc<AtomicU8>, // Sound timer
-    pub keys: [KeyState; 16],
+    pub keys: [bool; 16],
     pub stack: [usize; 16],
     pub screen: Screen,
     pub memory: Memory,
+    pub key_state: KeyState,
     pub last_key: u8,
 }
 
 impl Chip8 {
+    pub fn new() -> Self {
+        Chip8 {
+            pc: PROGRAM_START,
+            ..Chip8::default()
+        }
+    }
     pub fn load_font(&mut self) {
         let base = 0x0;
         self.memory[base..base + CHIP8_FONTSET.len()].copy_from_slice(&CHIP8_FONTSET);
     }
     pub fn press_key(&mut self, key: u8) {
-        self.keys[key as usize] = KeyState::RegisteredPress;
+        self.keys[key as usize] = true;
     }
     pub fn release_key(&mut self, key: u8) {
-        self.keys[key as usize] = KeyState::AwaitingPress;
+        self.keys[key as usize] = false;
     }
     pub fn run_step(&mut self) {
         for _ in 0..8 {
@@ -259,20 +264,16 @@ impl Chip8 {
             }
             Skp { x } => {
                 let vx = *self.vx(x);
-                let key = &mut self.keys[(vx & 0xF) as usize];
-                if *key == KeyState::RegisteredPress {
-                    self.pc += 4;
-                    *key = KeyState::AwaitingRelease;
+                if self.keys[(vx & 0xF) as usize] {
+                    self.pc += 4
                 } else {
                     self.pc += 2
                 }
             }
             Sknp { x } => {
                 let vx = *self.vx(x);
-                let key = &mut self.keys[(vx & 0xF) as usize];
-                if *key != KeyState::RegisteredPress {
-                    self.pc += 4;
-                    *key = KeyState::AwaitingRelease;
+                if !self.keys[(vx & 0xF) as usize] {
+                    self.pc += 4
                 } else {
                     self.pc += 2
                 }
@@ -286,17 +287,25 @@ impl Chip8 {
                 *self.vx(x) = self.dt.load(Ordering::Acquire);
                 self.pc += 2;
             }
-            Ldvd { x } => {
-                let all_clear = self.keys.iter().all(|&k| k == KeyState::AwaitingPress);
-                for (key, key_state) in self.keys.into_iter().enumerate() {
-                    if key_state == KeyState::AwaitingPress {
-                        self.last_key = key as u8;
-                    } else if key_state == KeyState::AwaitingRelease && all_clear {
+            Ldvd { x } => match self.key_state {
+                KeyState::AwaitingPress => {
+                    for (key, pressed) in self.keys.into_iter().enumerate() {
+                        if pressed {
+                            self.key_state = KeyState::AwaitingRelease;
+                            self.last_key = key as u8;
+                            break;
+                        }
+                    }
+                }
+                KeyState::AwaitingRelease => {
+                    let all_clear = self.keys.iter().all(|&k| !k);
+                    if all_clear {
+                        self.key_state = KeyState::AwaitingPress;
                         *self.vx(x) = self.last_key;
                         self.pc += 2;
                     }
                 }
-            }
+            },
             Ldsv { x } => {
                 let val = *self.vx(x);
                 self.st.store(val, Ordering::Release);
