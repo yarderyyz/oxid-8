@@ -1,14 +1,17 @@
 use clap::Parser;
 
-use oxid8::audio::Beeper;
 use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
+
+use atomic_enum::atomic_enum;
 
 use std::fs::File;
 use std::io::{self, Read};
-use std::sync::mpsc;
+use std::sync::atomic::Ordering;
+use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Duration;
 
+use oxid8::audio::Beeper;
 use oxid8::consts::PROGRAM_START;
 use oxid8::consts::RAM_SIZE;
 use oxid8::cpu::{BufChannel, Chip8};
@@ -34,16 +37,16 @@ fn load_rom(filename: &str, memory: &mut [u8]) -> io::Result<()> {
     Ok(())
 }
 
-#[derive(Debug, Default)]
-struct Model {
-    running_state: RunningState,
+#[atomic_enum]
+#[derive(PartialEq, Eq)]
+enum RunningState {
+    Running = 0,
+    Done,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
-enum RunningState {
-    #[default]
-    Running,
-    Done,
+#[derive(Debug)]
+struct Model {
+    running_state: Arc<AtomicRunningState>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -54,15 +57,14 @@ pub enum Message {
 }
 
 fn main() -> color_eyre::Result<()> {
-    let mut model = Model::default();
+    let mut model = Model {
+        running_state: Arc::new(AtomicRunningState::new(RunningState::Running)),
+    };
 
     let args = Args::parse();
 
     // TODO: Support other pc start points
-    let mut chip = Chip8 {
-        pc: PROGRAM_START,
-        ..Chip8::default()
-    };
+    let mut chip = Chip8::new();
     chip.load_font();
 
     let res = load_rom(&args.rom, &mut chip.memory[PROGRAM_START..]);
@@ -78,34 +80,40 @@ fn main() -> color_eyre::Result<()> {
 
     // Setup async rendering thread using a BufChannel for communication.
     let (mut buf_tx, buf_rx) = BufChannel::new();
-    thread::spawn(move || loop {
-        while let Ok(screen) = buf_rx.try_recv() {
-            if let Ok(screen) = screen.read() {
-                // Render the current view
-                terminal
-                    .draw(|f| gfx::view(&screen, f, args.debug))
-                    .unwrap();
+    let running_state = model.running_state.clone();
+    let render_join_handle = thread::spawn(move || {
+        while running_state.load(Ordering::Acquire) != RunningState::Done {
+            while let Ok(screen) = buf_rx.try_recv() {
+                if let Ok(screen) = screen.read() {
+                    // Render the current view
+                    terminal
+                        .draw(|f| gfx::view(&screen, f, args.debug))
+                        .unwrap();
+                }
             }
+            thread::sleep(Duration::from_nanos(16_666_667)); // ~60 Hz
         }
-        thread::sleep(Duration::from_nanos(16_666_667)); // ~60 Hz
     });
 
     let (input_tx, input_rx) = mpsc::channel::<Message>();
-    thread::spawn(move || loop {
-        // Handle events and map to a Message
-        let message = if let Event::Key(key) = event::read().unwrap() {
-            handle_key(key)
-        } else {
-            None
-        };
-        if let Some(message) = message {
-            input_tx.send(message).unwrap();
-        }
+    let running_state = model.running_state.clone();
+    let input_join_handle = thread::spawn(move || {
+        while running_state.load(Ordering::Acquire) != RunningState::Done {
+            // Handle events and map to a Message
+            let message = if let Event::Key(key) = event::read().unwrap() {
+                handle_key(key)
+            } else {
+                None
+            };
+            if let Some(message) = message {
+                input_tx.send(message).unwrap();
+            }
 
-        thread::sleep(Duration::from_nanos(16_666_667)); // ~60 Hz
+            thread::sleep(Duration::from_nanos(16_666_667)); // ~60 Hz
+        }
     });
 
-    while model.running_state != RunningState::Done {
+    while model.running_state.load(Ordering::Acquire) != RunningState::Done {
         chip.run_step();
 
         buf_tx.send(&chip.screen);
@@ -127,6 +135,9 @@ fn main() -> color_eyre::Result<()> {
 
         thread::sleep(Duration::from_millis(2)); // 500 Hz
     }
+
+    let _ = render_join_handle.join();
+    let _ = input_join_handle.join();
 
     tui::restore_terminal()?;
     Ok(())
@@ -170,7 +181,9 @@ fn handle_key(key: event::KeyEvent) -> Option<Message> {
 
 fn update(model: &mut Model, msg: Message) -> Option<Message> {
     if let Message::Quit = msg {
-        model.running_state = RunningState::Done;
+        model
+            .running_state
+            .store(RunningState::Done, Ordering::Release);
     }
     None
 }
