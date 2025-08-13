@@ -1,6 +1,7 @@
 use std::{
-    cell::UnsafeCell,
-    ops::{Deref, DerefMut},
+    cell::{Cell, RefCell, UnsafeCell},
+    marker::PhantomData,
+    ops::{AddAssign, Deref, DerefMut},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -25,15 +26,11 @@ impl BufferState {
         }
     }
     pub fn decode(state: usize) -> Self {
-        let read_idx = state & 0xF;
-        let ready_idx = (state >> 4) & 0xF;
-        let write_idx = (state >> 8) & 0xF;
-        let dirty = (state >> 12) & 0xF == 1;
         Self {
-            read_idx,
-            ready_idx,
-            write_idx,
-            dirty,
+            read_idx: state & 0xF,
+            ready_idx: (state >> 4) & 0xF,
+            write_idx: (state >> 8) & 0xF,
+            dirty: (state >> 12) & 0xF == 1,
         }
     }
 
@@ -54,68 +51,52 @@ pub struct TripleBuffer<T> {
 
 pub struct TripleBufferWriter<T> {
     buffer: Arc<TripleBuffer<T>>,
-    borrowers: AtomicUsize,
+    borrowers: Cell<usize>,
 }
 
 impl<T> TripleBufferWriter<T> {
     pub fn write(&mut self) -> WriteHandle<T> {
         let state = self.buffer.state();
-        let borrowers = self.add_handle();
-        if borrowers > 0 {
+        if self.borrowers.get() > 0 {
             panic!("TripleBuffer can only have one active writer");
         }
+        self.add_handle();
         WriteHandle::new(self, &self.buffer.buffers[state.write_idx])
     }
 
-    fn add_handle(&self) -> usize {
-        self.borrowers.fetch_add(1, Ordering::Acquire)
+    fn add_handle(&self) {
+        self.borrowers.set(self.borrowers.get() + 1);
     }
 
-    fn drop_handle(&self) -> usize {
+    fn drop_handle(&self) {
+        self.borrowers.set(self.borrowers.get() - 1);
         self.buffer.swap_write();
-        self.borrowers.fetch_sub(1, Ordering::Release)
     }
 }
 
 pub struct TripleBufferReader<T> {
     buffer: Arc<TripleBuffer<T>>,
-    borrowers: AtomicUsize,
+    borrowers: Cell<usize>,
 }
 
 impl<T> TripleBufferReader<T> {
     pub fn read(&self) -> ReadHandle<T> {
-        let borrowers = self.add_handle();
-        let state = if borrowers == 0 {
+        let state = if self.borrowers.get() == 0 {
             self.buffer.try_swap_read()
         } else {
             self.buffer.state()
         };
+        self.add_handle();
         ReadHandle::new(self, &self.buffer.buffers[state.read_idx])
     }
 
-    fn add_handle(&self) -> usize {
-        self.borrowers.fetch_add(1, Ordering::Acquire)
+    fn add_handle(&self) {
+        self.borrowers.set(self.borrowers.get() + 1);
     }
 
-    fn drop_handle(&self) -> usize {
-        self.borrowers.fetch_sub(1, Ordering::Release)
+    fn drop_handle(&self) {
+        self.borrowers.set(self.borrowers.get() - 1);
     }
-}
-
-pub fn triple_buffer<T: Copy>(initial: T) -> (TripleBufferWriter<T>, TripleBufferReader<T>) {
-    let buffer = Arc::new(TripleBuffer::new(initial));
-
-    let writer = TripleBufferWriter {
-        buffer: buffer.clone(),
-        borrowers: 0.into(),
-    };
-
-    let reader = TripleBufferReader {
-        buffer,
-        borrowers: 0.into(),
-    };
-
-    (writer, reader)
 }
 
 pub struct ReadHandle<'a, T> {
@@ -193,7 +174,7 @@ impl<T: Copy> TripleBuffer<T> {
 
 impl<T> TripleBuffer<T> {
     fn state(&self) -> BufferState {
-        let current = self.encoded_state.load(Ordering::Relaxed);
+        let current = self.encoded_state.load(Ordering::Acquire);
         BufferState::decode(current)
     }
 
@@ -243,6 +224,22 @@ impl<T> TripleBuffer<T> {
     }
 }
 
+pub fn triple_buffer<T: Copy>(initial: T) -> (TripleBufferWriter<T>, TripleBufferReader<T>) {
+    let buffer = Arc::new(TripleBuffer::new(initial));
+
+    let writer = TripleBufferWriter {
+        buffer: buffer.clone(),
+        borrowers: 0.into(),
+    };
+
+    let reader = TripleBufferReader {
+        buffer,
+        borrowers: 0.into(),
+    };
+
+    (writer, reader)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,5 +270,17 @@ mod tests {
         let encoded_state = state.encode();
         let decoded_state = BufferState::decode(encoded_state);
         assert_eq!(state, decoded_state);
+    }
+
+    #[test]
+    fn test_basic_publish() {
+        let (mut tx, rx) = triple_buffer::<usize>(0);
+        {
+            let mut handle = tx.write();
+            *handle = 42
+        }
+
+        let handle = rx.read();
+        assert_eq!(*handle, 42);
     }
 }
