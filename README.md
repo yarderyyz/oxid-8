@@ -1,4 +1,4 @@
-# oxid-8
+# Oxid-8
 
 A tiny **CHIP‑8** emulator written in Rust.
 
