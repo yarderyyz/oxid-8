@@ -75,8 +75,7 @@ jobs:
     - name: Build documentation
       run: |
         cargo doc --no-deps --document-private-items
-        echo "<meta http-equiv=\"refresh\" content=\"0; url=your_crate_name\">" > target/doc/index.html
-        # Replace 'your_crate_name' with your actual crate name
+        echo "<meta http-equiv=\"refresh\" content=\"0; url=oxid8\">" > target/doc/index.html
     
     - name: Setup Pages
       uses: actions/configure-pages@v4
