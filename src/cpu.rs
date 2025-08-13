@@ -5,7 +5,7 @@ use crate::op::ChipOp;
 use crate::{consts::PROGRAM_START, decode::decode};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
-    mpsc, Arc, RwLock,
+    Arc,
 };
 
 use crate::consts::{CHIP8_FONTSET, H, W};
@@ -17,45 +17,6 @@ pub enum KeyState {
     AwaitingRelease,
 }
 pub type Screen = [[u8; W]; H];
-
-type BufRef = Arc<RwLock<Screen>>;
-
-// This is going to be shared between threads so for fun lets
-// try setting this up so there is two screen buffers, one that
-// is written to by the interpreter and another that is used by
-// the render thread.
-pub struct BufChannel {
-    buf: BufRef,
-    tx: mpsc::Sender<BufRef>,
-}
-
-// Thinking about this, because screen in the chip-8 is causal
-// we can't really swap two buffers between a render thread
-// and a "simulation" thread to avoid copies. We could use a
-// mpsc cue directly and copy the screen into new heap allocation
-// push it to the render thread, but I think we can avoid the
-// allocations and just swap between two buffers that we copy the
-// data into. We wont save any copies in this case, but we will save
-// unnecessary heap allocations.
-impl BufChannel {
-    pub fn new() -> (Self, mpsc::Receiver<BufRef>) {
-        let (tx, rx) = mpsc::channel::<BufRef>();
-        (
-            Self {
-                buf: Arc::new(RwLock::new([[0; W]; H])),
-                tx,
-            },
-            rx,
-        )
-    }
-
-    pub fn send(&mut self, buf: &Screen) {
-        if let Ok(mut channel_buf) = self.buf.try_write() {
-            channel_buf.copy_from_slice(buf);
-            self.tx.send(self.buf.clone()).unwrap();
-        }
-    }
-}
 
 #[derive(Default)]
 pub struct Chip8 {
@@ -352,5 +313,346 @@ impl Chip8 {
     #[inline]
     fn vx(&mut self, x: usize) -> &mut u8 {
         &mut self.v[x]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_exec_ret() {
+        let pc = 0x200;
+        let mut chip: Chip8 = Default::default();
+        chip.stack[0] = pc;
+        chip.sp = 1;
+        chip.pc = 0xABC;
+
+        chip.exec(ChipOp::Ret);
+        assert!(chip.sp == 0);
+        assert!(chip.pc == pc);
+    }
+
+    #[test]
+    fn test_exec_jp() {
+        let pc = 0x200;
+        let mut chip: Chip8 = Default::default();
+        let op = ChipOp::Jp { nnn: pc };
+        chip.exec(op);
+        assert!(chip.pc == pc);
+    }
+
+    #[test]
+    fn test_exec_call() {
+        let addr = 0xABC;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+
+        chip.exec(ChipOp::Call { nnn: addr });
+        assert!(chip.sp == 1);
+        assert!(chip.pc == addr);
+    }
+
+    #[test]
+    fn test_exec_se_skip() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 20;
+
+        chip.exec(ChipOp::Se { x: 0, kk: 20 });
+        assert!(chip.pc == 0x204);
+    }
+
+    #[test]
+    fn test_exec_se_no_skip() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[1] = 10;
+
+        chip.exec(ChipOp::Se { x: 1, kk: 20 });
+        assert!(chip.pc == 0x202);
+    }
+
+    #[test]
+    fn test_exec_sne_no_skip() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 20;
+
+        chip.exec(ChipOp::Sne { x: 0, kk: 20 });
+        assert!(chip.pc == 0x202);
+    }
+
+    #[test]
+    fn test_exec_sne_skip() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[1] = 10;
+
+        chip.exec(ChipOp::Sne { x: 1, kk: 20 });
+        assert!(chip.pc == 0x204);
+    }
+
+    #[test]
+    fn test_exec_ser_skip() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 20;
+        chip.v[1] = 20;
+
+        chip.exec(ChipOp::Ser { x: 0, y: 1 });
+        assert!(chip.pc == 0x204);
+    }
+
+    #[test]
+    fn test_exec_ser_no_skip() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 20;
+        chip.v[1] = 17;
+
+        chip.exec(ChipOp::Ser { x: 0, y: 1 });
+        assert!(chip.pc == 0x202);
+    }
+
+    #[test]
+    fn test_exec_ld() {
+        let reg = 3;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+
+        chip.exec(ChipOp::Ld { x: reg, kk: 0xAB });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.v[reg] == 0xAB);
+    }
+
+    #[test]
+    fn test_exec_add() {
+        let reg = 3;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+
+        chip.exec(ChipOp::Add { x: reg, kk: 0xA0 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.v[reg] == 0xA0);
+
+        chip.exec(ChipOp::Add { x: reg, kk: 0x0B });
+        assert_eq!(chip.pc, 0x204);
+        assert!(chip.v[reg] == 0xAB);
+    }
+
+    #[test]
+    fn test_exec_ldr() {
+        let x = 3;
+        let y = 5;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[y] = 0xAB;
+
+        chip.exec(ChipOp::Ldr { x, y });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.v[x] == 0xAB);
+    }
+
+    #[test]
+    fn test_run_drw_row() {
+        let img_loc = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 0;
+        chip.v[1] = 0;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0xAB;
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.screen[0][0] == 0xAB);
+    }
+
+    #[test]
+    fn test_run_drw_row_x_offset() {
+        let img_loc = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 1;
+        chip.v[1] = 0;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0b11110000;
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.screen[0][0] == 0b01111000);
+    }
+
+    #[test]
+    fn test_run_drw_row_x_offset_byte_boundary() {
+        let img_loc = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 6;
+        chip.v[1] = 0;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0b11110000;
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.screen[0][0] == 0b00000011);
+        assert!(chip.screen[0][1] == 0b11000000);
+    }
+
+    #[test]
+    fn test_run_drw_row_x_offset_big() {
+        let img_loc = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 13;
+        chip.v[1] = 0;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0b11110000;
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.screen[0][1] == 0b00000111);
+        assert!(chip.screen[0][2] == 0b10000000);
+    }
+
+    #[test]
+    fn test_run_drw_zero() {
+        let img_loc: usize = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 0;
+        chip.v[1] = 0;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0xF0;
+        chip.memory[img_loc + 1] = 0x90;
+        chip.memory[img_loc + 2] = 0x90;
+        chip.memory[img_loc + 3] = 0x90;
+        chip.memory[img_loc + 4] = 0xF0;
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.screen[0][0] == 0xF0);
+        assert!(chip.screen[1][0] == 0x90);
+        assert!(chip.screen[2][0] == 0x90);
+        assert!(chip.screen[3][0] == 0x90);
+        assert!(chip.screen[4][0] == 0xF0);
+    }
+
+    #[test]
+    fn test_run_drw_zero_y_offset() {
+        let img_loc: usize = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 0;
+        chip.v[1] = 1;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0xF0;
+        chip.memory[img_loc + 1] = 0x90;
+        chip.memory[img_loc + 2] = 0x90;
+        chip.memory[img_loc + 3] = 0x90;
+        chip.memory[img_loc + 4] = 0xF0;
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.screen[1][0] == 0xF0);
+        assert!(chip.screen[2][0] == 0x90);
+        assert!(chip.screen[3][0] == 0x90);
+        assert!(chip.screen[4][0] == 0x90);
+        assert!(chip.screen[5][0] == 0xF0);
+    }
+
+    #[test]
+    fn test_run_drw_zero_xy_offset() {
+        let img_loc: usize = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 4;
+        chip.v[1] = 1;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0xF0;
+        chip.memory[img_loc + 1] = 0x90;
+        chip.memory[img_loc + 2] = 0x90;
+        chip.memory[img_loc + 3] = 0x90;
+        chip.memory[img_loc + 4] = 0xF0;
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(chip.screen[1][0] == 0x0F);
+        assert!(chip.screen[2][0] == 0x09);
+        assert!(chip.screen[3][0] == 0x09);
+        assert!(chip.screen[4][0] == 0x09);
+        assert!(chip.screen[5][0] == 0x0F);
+    }
+
+    #[test]
+    fn test_run_drw_test_collision() {
+        let img_loc: usize = 0x400;
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+        chip.v[0] = 4;
+        chip.v[1] = 1;
+        chip.i = img_loc;
+        chip.memory[img_loc] = 0xF0;
+        chip.memory[img_loc + 1] = 0x90;
+        chip.memory[img_loc + 2] = 0x90;
+        chip.memory[img_loc + 3] = 0x90;
+        chip.memory[img_loc + 4] = 0xF0;
+
+        // Test first drw has no collision
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        assert!(chip.v[0xF] == 0);
+        assert_eq!(chip.pc, 0x202);
+
+        // Change offset and check that the collision flag is set
+        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 4 });
+        assert!(chip.v[0x1] == 1);
+        assert_eq!(chip.pc, 0x204);
+    }
+
+    #[test]
+    fn test_exec_clr() {
+        let mut chip = Chip8 {
+            pc: 0x200,
+            ..Chip8::default()
+        };
+
+        chip.screen[0][0] = 0xFF;
+        chip.screen[10][5] = 0x0F;
+        chip.v[0xF] = 1;
+
+        chip.exec(ChipOp::Cls);
+        assert_eq!(chip.pc, 0x202);
+
+        assert!(chip.screen.iter().all(|row| row.iter().all(|&b| b == 0)));
     }
 }
