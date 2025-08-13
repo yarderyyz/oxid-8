@@ -517,7 +517,7 @@ impl<T> TripleBufferWriter<T> {
     /// *write_guard = 42;
     /// // Data is published when write_guard goes out of scope
     /// ```
-    pub fn write(&mut self) -> WriteHandle<T> {
+    pub fn write(&mut self) -> WriteHandle<'_, T> {
         let state = self.buffer.state();
         if self.borrowers.get() > 0 {
             panic!("TripleBuffer can only have one active writer");
@@ -629,7 +629,7 @@ impl<T> TripleBufferReader<T> {
     /// let another_read = reader.read();
     /// assert_eq!(&*read_guard as *const _, &*another_read as *const _);
     /// ```
-    pub fn read(&self) -> ReadHandle<T> {
+    pub fn read(&self) -> ReadHandle<'_, T> {
         let state = if self.borrowers.get() == 0 {
             // No active reads, try to get fresh data
             self.buffer.try_swap_read()
