@@ -1,7 +1,6 @@
 use std::{
-    cell::{Cell, RefCell, UnsafeCell},
-    marker::PhantomData,
-    ops::{AddAssign, Deref, DerefMut},
+    cell::{Cell, UnsafeCell},
+    ops::{Deref, DerefMut},
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc,
@@ -49,10 +48,14 @@ pub struct TripleBuffer<T> {
     encoded_state: AtomicUsize,
 }
 
+unsafe impl<T: Send> Send for TripleBuffer<T> {}
+
 pub struct TripleBufferWriter<T> {
     buffer: Arc<TripleBuffer<T>>,
     borrowers: Cell<usize>,
 }
+
+unsafe impl<T: Send> Send for TripleBufferWriter<T> {}
 
 impl<T> TripleBufferWriter<T> {
     pub fn write(&mut self) -> WriteHandle<T> {
@@ -78,6 +81,8 @@ pub struct TripleBufferReader<T> {
     buffer: Arc<TripleBuffer<T>>,
     borrowers: Cell<usize>,
 }
+
+unsafe impl<T: Send> Send for TripleBufferReader<T> {}
 
 impl<T> TripleBufferReader<T> {
     pub fn read(&self) -> ReadHandle<T> {
@@ -276,11 +281,27 @@ mod tests {
     fn test_basic_publish() {
         let (mut tx, rx) = triple_buffer::<usize>(0);
         {
-            let mut handle = tx.write();
-            *handle = 42
+            let mut write_handle = tx.write();
+            *write_handle = 42
         }
 
-        let handle = rx.read();
-        assert_eq!(*handle, 42);
+        let read_handle = rx.read();
+        assert_eq!(*read_handle, 42);
+    }
+
+    #[test]
+    fn test_basic_publish_release() {
+        let (mut tx, rx) = triple_buffer::<usize>(0);
+        let mut write_handle = tx.write();
+        *write_handle = 42;
+
+        let read_handle = rx.read();
+        assert_eq!(*read_handle, 0);
+
+        drop(write_handle);
+        drop(read_handle);
+
+        let read_handle = rx.read();
+        assert_eq!(*read_handle, 42);
     }
 }
