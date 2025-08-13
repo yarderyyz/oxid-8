@@ -14,7 +14,8 @@ use std::time::Duration;
 use oxid8::audio::Beeper;
 use oxid8::consts::PROGRAM_START;
 use oxid8::consts::RAM_SIZE;
-use oxid8::cpu::{BufChannel, Chip8};
+use oxid8::cpu::{Chip8, Screen};
+use oxid8::triple_buffer;
 use oxid8::{gfx, timers};
 
 #[derive(Parser, Debug)]
@@ -63,7 +64,6 @@ fn main() -> color_eyre::Result<()> {
 
     let args = Args::parse();
 
-    // TODO: Support other pc start points
     let mut chip = Chip8::new();
     chip.load_font();
 
@@ -79,17 +79,16 @@ fn main() -> color_eyre::Result<()> {
     let timer_rx = timers::spawn_timers(chip.dt.clone(), chip.st.clone());
 
     // Setup async rendering thread using a BufChannel for communication.
-    let (mut buf_tx, buf_rx) = BufChannel::new();
+    let (mut buf_tx, buf_rx) = triple_buffer::triple_buffer::<Screen>(Screen::default());
     let running_state = model.running_state.clone();
     let render_join_handle = thread::spawn(move || {
         while running_state.load(Ordering::Acquire) != RunningState::Done {
-            while let Ok(screen) = buf_rx.try_recv() {
-                if let Ok(screen) = screen.read() {
-                    // Render the current view
-                    terminal
-                        .draw(|f| gfx::view(&screen, f, args.debug))
-                        .unwrap();
-                }
+            {
+                let read_handle = buf_rx.read();
+                // Render the current view
+                terminal
+                    .draw(|f| gfx::view(&read_handle, f, args.debug))
+                    .unwrap();
             }
             thread::sleep(Duration::from_nanos(16_666_667)); // ~60 Hz
         }
@@ -116,7 +115,10 @@ fn main() -> color_eyre::Result<()> {
     while model.running_state.load(Ordering::Acquire) != RunningState::Done {
         chip.run_step();
 
-        buf_tx.send(&chip.screen);
+        {
+            let mut send_handle = buf_tx.write();
+            *send_handle = chip.screen;
+        }
 
         // Run input
         while let Ok(message) = input_rx.try_recv() {
