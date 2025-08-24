@@ -1,5 +1,6 @@
 use crate::consts::RAM_SIZE;
 
+#[derive(Clone)]
 pub struct Memory(pub [u8; RAM_SIZE]);
 impl Default for Memory {
     fn default() -> Self {

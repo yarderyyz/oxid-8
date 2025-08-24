@@ -143,7 +143,7 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
     f.render_widget(cmd_table, chunks[2]);
 }
 
-pub fn view(screen: &Screen, frame: &mut Frame, _debug: bool) {
+pub fn view(chip: &Chip8, frame: &mut Frame, _debug: bool) {
     let main_area = frame.area();
 
     let [left_area, _right_area] =
@@ -160,8 +160,8 @@ pub fn view(screen: &Screen, frame: &mut Frame, _debug: bool) {
     let buf = frame.buffer_mut();
     for y in 0..16 {
         for x in 0..8 {
-            let mut fg = screen[(y * 2, x)];
-            let mut bg = screen[((y * 2) + 1, x)];
+            let mut fg = chip.screen[(y * 2, x)];
+            let mut bg = chip.screen[((y * 2) + 1, x)];
 
             let x_buf = (x * 8) as u16 + inner_left.x;
             let y_buf = y as u16 + inner_left.y;

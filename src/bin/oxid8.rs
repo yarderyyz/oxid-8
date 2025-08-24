@@ -78,7 +78,7 @@ fn main() -> color_eyre::Result<()> {
     let timer_rx = timers::spawn_timers(chip.dt.clone(), chip.st.clone());
 
     // Setup async rendering thread using a BufChannel for communication.
-    let (mut buf_tx, buf_rx) = triple_buffer::triple_buffer::<Screen>(Screen::default((H, W)));
+    let (mut buf_tx, buf_rx) = triple_buffer::triple_buffer::<Chip8>(Chip8::new());
     let running_state = model.running_state.clone();
     let render_join_handle = thread::spawn(move || {
         while running_state.load(Ordering::Acquire) != RunningState::Done {
@@ -116,7 +116,7 @@ fn main() -> color_eyre::Result<()> {
 
         {
             let mut send_handle = buf_tx.write();
-            *send_handle = chip.screen.clone(); // must clone here as screen is causal
+            *send_handle = chip.clone(); // must clone here as screen is causal
         }
 
         // Run input

@@ -11,14 +11,14 @@ use std::sync::{
 
 use crate::consts::{CHIP8_FONTSET, H, W};
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub enum Resolution {
     #[default]
     Low,
     High,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub enum KeyState {
     #[default]
     AwaitingPress,
@@ -27,7 +27,7 @@ pub enum KeyState {
 
 pub type Screen = Array2<u8>;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Chip8 {
     pub pc: usize,         // Program counter
     pub v: [u8; 16],       // General purpose registers
