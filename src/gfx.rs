@@ -7,7 +7,7 @@ use ratatui::widgets::{Block, Borders, Row, Table};
 use ratatui::{style::Color, Frame};
 
 use crate::consts::{PROGRAM_START, WINDOW};
-use crate::cpu::{Chip8, Screen};
+use crate::cpu::{Chip8, Resolution};
 use crate::decode::decode;
 
 pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
@@ -146,8 +146,16 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
 pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
     let main_area = frame.area();
 
-    let [left_area, right_area] =
-        Layout::horizontal([Constraint::Length(68), Constraint::Percentage(60)]).areas(main_area);
+    let res_factor: usize = if matches!(chip.resolution, Resolution::High) {
+        2
+    } else {
+        1
+    };
+    let [left_area, right_area] = Layout::horizontal([
+        Constraint::Length((64 * res_factor as u16) + 2),
+        Constraint::Percentage(60),
+    ])
+    .areas(main_area);
 
     let outer_left_block = Block::bordered().title("Oxid-8");
     let inner_left = outer_left_block.inner(left_area);
@@ -158,8 +166,8 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
     }
 
     let buf = frame.buffer_mut();
-    for y in 0..16 {
-        for x in 0..8 {
+    for y in 0..(16 * res_factor) {
+        for x in 0..(8 * res_factor) {
             let mut fg = chip.screen[(y * 2, x)];
             let mut bg = chip.screen[((y * 2) + 1, x)];
 
@@ -169,8 +177,8 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
             for bit in 0..8 {
                 if let Some(cell) = buf.cell_mut((x_buf + (8 - bit), y_buf)) {
                     cell.set_symbol("▀");
-                    cell.set_fg(Color::LightMagenta);
-                    cell.set_bg(Color::LightMagenta);
+                    cell.set_fg(Color::Black);
+                    cell.set_bg(Color::Black);
                     if fg & 0x1 == 0x1 {
                         cell.set_fg(Color::Blue);
                     }

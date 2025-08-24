@@ -12,8 +12,8 @@ use std::thread;
 use std::time::Duration;
 
 use oxid8::audio::Beeper;
-use oxid8::consts::{H, PROGRAM_START, RAM_SIZE, W};
-use oxid8::cpu::{Chip8, Screen};
+use oxid8::consts::{PROGRAM_START, RAM_SIZE};
+use oxid8::cpu::Chip8;
 use oxid8::triple_buffer;
 use oxid8::{gfx, timers};
 
@@ -196,7 +196,6 @@ mod tui {
             event::{
                 KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
             },
-            style::Print,
             terminal::{
                 disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
                 EnterAlternateScreen, LeaveAlternateScreen,
