@@ -70,69 +70,69 @@ impl Chip8 {
                 self.pc = self.stack[self.sp - 1];
                 self.sp -= 1;
             }
-            Jp { nnn } => {
+            JpNnn { nnn } => {
                 self.pc = nnn;
             }
-            Call { nnn } => {
+            CallNnn { nnn } => {
                 self.sp += 1;
                 self.stack[self.sp - 1] = self.pc + 2;
                 self.pc = nnn;
             }
-            Se { x, nn } => {
+            SeVxNn { x, nn } => {
                 if self.v[x] == nn {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
                 }
             }
-            Sne { x, nn } => {
+            SneVxNn { x, nn } => {
                 if *self.vx(x) != nn {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
                 }
             }
-            Ser { x, y } => {
+            SeVxVy { x, y } => {
                 if *self.vx(x) == *self.vx(y) {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
                 }
             }
-            Ld { x, nn } => {
+            LdVxNn { x, nn } => {
                 *self.vx(x) = nn;
                 self.pc += 2;
             }
-            Add { x, nn } => {
+            AddVxNn { x, nn } => {
                 let r = self.vx(x);
                 *r = r.wrapping_add(nn);
                 self.pc += 2;
             }
-            Ldr { x, y } => {
+            LdVxVy { x, y } => {
                 let vy = *self.vx(y);
                 let vx = self.vx(x);
                 *vx = vy;
                 self.pc += 2;
             }
-            Orr { x, y } => {
+            OrVxVy { x, y } => {
                 let vy = *self.vx(y);
                 let vx = self.vx(x);
                 *vx |= vy;
                 self.pc += 2;
             }
-            Andr { x, y } => {
+            AndVxVy { x, y } => {
                 let vy = *self.vx(y);
                 let vx = self.vx(x);
                 *vx &= vy;
                 self.pc += 2;
             }
-            Xorr { x, y } => {
+            XorVxVy { x, y } => {
                 let vy = *self.vx(y);
                 let vx = self.vx(x);
                 *vx ^= vy;
                 self.pc += 2;
             }
-            Addr { x, y } => {
+            AddVxVy { x, y } => {
                 let vy = *self.vx(y);
                 let vx = *self.vx(x);
                 let (res, carry) = vx.overflowing_add(vy);
@@ -140,7 +140,7 @@ impl Chip8 {
                 self.v[0xF] = carry as u8;
                 self.pc += 2;
             }
-            Subr { x, y } => {
+            SubVxVy { x, y } => {
                 let vy = *self.vx(y);
                 let vx = *self.vx(x);
                 let (res, overflow) = vx.overflowing_sub(vy);
@@ -148,13 +148,13 @@ impl Chip8 {
                 self.v[0xF] = !overflow as u8;
                 self.pc += 2;
             }
-            Shrr { x, .. } => {
+            ShrVxVy { x, .. } => {
                 let vx = *self.vx(x);
                 *self.vx(x) = vx >> 1;
                 self.v[0xF] = vx & 0x1;
                 self.pc += 2;
             }
-            Subnr { x, y } => {
+            SubnVxVy { x, y } => {
                 let vy = *self.vx(y);
                 let vx = *self.vx(x);
                 let (res, overflow) = vy.overflowing_sub(vx);
@@ -162,32 +162,32 @@ impl Chip8 {
                 self.v[0xF] = !overflow as u8;
                 self.pc += 2;
             }
-            Shlr { x, .. } => {
+            ShlVxVy { x, .. } => {
                 let vx = *self.vx(x);
                 *self.vx(x) = vx << 1;
                 self.v[0xF] = vx >> 7;
                 self.pc += 2;
             }
-            Sner { x, y } => {
+            SneVxVy { x, y } => {
                 if *self.vx(x) != *self.vx(y) {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
                 }
             }
-            Ldi { nnn } => {
+            LdINnn { nnn } => {
                 self.i = nnn;
                 self.pc += 2;
             }
-            Jpo { nnn } => {
+            JpV0Nnn { nnn } => {
                 self.pc = (nnn + (*self.vx(0) as u16)) as usize;
             }
-            Rnd { x, nn } => {
+            RndVxNn { x, nn } => {
                 let n: u8 = random!();
                 *self.vx(x) = n & nn;
                 self.pc += 2;
             }
-            Drw { x, y, n } => {
+            DrwVxVyN { x, y, n } => {
                 let vx = *self.vx(x) as usize;
                 let vy = *self.vx(y) as usize;
                 let bit_off = vx & 7; // vx % 8
@@ -223,7 +223,7 @@ impl Chip8 {
                 }
                 self.pc += 2;
             }
-            Skp { x } => {
+            SkpVx { x } => {
                 let vx = *self.vx(x);
                 if self.keys[(vx & 0xF) as usize] {
                     self.pc += 4
@@ -231,7 +231,7 @@ impl Chip8 {
                     self.pc += 2
                 }
             }
-            Sknp { x } => {
+            SknpVx { x } => {
                 let vx = *self.vx(x);
                 if !self.keys[(vx & 0xF) as usize] {
                     self.pc += 4
@@ -239,16 +239,16 @@ impl Chip8 {
                     self.pc += 2
                 }
             }
-            Lddv { x } => {
+            LdDtVx { x } => {
                 let val = *self.vx(x);
                 self.dt.store(val, Ordering::Release);
                 self.pc += 2;
             }
-            Ldk { x } => {
+            LdVxDt { x } => {
                 *self.vx(x) = self.dt.load(Ordering::Acquire);
                 self.pc += 2;
             }
-            Ldvd { x } => match self.key_state {
+            LdVxK { x } => match self.key_state {
                 KeyState::AwaitingPress => {
                     for (key, pressed) in self.keys.into_iter().enumerate() {
                         if pressed {
@@ -267,37 +267,37 @@ impl Chip8 {
                     }
                 }
             },
-            Ldsv { x } => {
+            LdStVx { x } => {
                 let val = *self.vx(x);
                 self.st.store(val, Ordering::Release);
                 self.pc += 2;
             }
-            Addi { x } => {
+            AddIVx { x } => {
                 let vx = *self.vx(x);
                 self.i += vx as usize;
                 self.pc += 2;
             }
-            Ldfv { x } => {
+            LdFVx { x } => {
                 // set I to the 5 line high hex sprite for the lowest nibble in vX
                 let vx = *self.vx(x) & 0x0F;
                 self.i = (vx * 5) as usize;
                 self.pc += 2;
             }
-            Ldbv { x } => {
+            LdBVx { x } => {
                 let vx = *self.vx(x);
                 self.memory[self.i] = (vx % 255) / 100;
                 self.memory[self.i + 1] = (vx % 100) / 10;
                 self.memory[self.i + 2] = vx % 10;
                 self.pc += 2;
             }
-            Ldiv { x } => {
+            LdIVx { x } => {
                 for vx in &mut self.v[0..=x] {
                     self.memory[self.i] = *vx;
                     self.i += 1;
                 }
                 self.pc += 2;
             }
-            Ldvi { x } => {
+            LdVxI { x } => {
                 for vx in &mut self.v[0..=x] {
                     *vx = self.memory[self.i];
                     self.i += 1;
@@ -337,7 +337,7 @@ mod tests {
     fn test_exec_jp() {
         let pc = 0x200;
         let mut chip: Chip8 = Default::default();
-        let op = ChipOp::Jp { nnn: pc };
+        let op = ChipOp::JpNnn { nnn: pc };
         chip.exec(op);
         assert!(chip.pc == pc);
     }
@@ -350,7 +350,7 @@ mod tests {
             ..Chip8::default()
         };
 
-        chip.exec(ChipOp::Call { nnn: addr });
+        chip.exec(ChipOp::CallNnn { nnn: addr });
         assert!(chip.sp == 1);
         assert!(chip.pc == addr);
     }
@@ -363,7 +363,7 @@ mod tests {
         };
         chip.v[0] = 20;
 
-        chip.exec(ChipOp::Se { x: 0, nn: 20 });
+        chip.exec(ChipOp::SeVxNn { x: 0, nn: 20 });
         assert!(chip.pc == 0x204);
     }
 
@@ -375,7 +375,7 @@ mod tests {
         };
         chip.v[1] = 10;
 
-        chip.exec(ChipOp::Se { x: 1, nn: 20 });
+        chip.exec(ChipOp::SeVxNn { x: 1, nn: 20 });
         assert!(chip.pc == 0x202);
     }
 
@@ -387,7 +387,7 @@ mod tests {
         };
         chip.v[0] = 20;
 
-        chip.exec(ChipOp::Sne { x: 0, nn: 20 });
+        chip.exec(ChipOp::SneVxNn { x: 0, nn: 20 });
         assert!(chip.pc == 0x202);
     }
 
@@ -399,7 +399,7 @@ mod tests {
         };
         chip.v[1] = 10;
 
-        chip.exec(ChipOp::Sne { x: 1, nn: 20 });
+        chip.exec(ChipOp::SneVxNn { x: 1, nn: 20 });
         assert!(chip.pc == 0x204);
     }
 
@@ -412,7 +412,7 @@ mod tests {
         chip.v[0] = 20;
         chip.v[1] = 20;
 
-        chip.exec(ChipOp::Ser { x: 0, y: 1 });
+        chip.exec(ChipOp::SeVxVy { x: 0, y: 1 });
         assert!(chip.pc == 0x204);
     }
 
@@ -425,7 +425,7 @@ mod tests {
         chip.v[0] = 20;
         chip.v[1] = 17;
 
-        chip.exec(ChipOp::Ser { x: 0, y: 1 });
+        chip.exec(ChipOp::SeVxVy { x: 0, y: 1 });
         assert!(chip.pc == 0x202);
     }
 
@@ -437,7 +437,7 @@ mod tests {
             ..Chip8::default()
         };
 
-        chip.exec(ChipOp::Ld { x: reg, nn: 0xAB });
+        chip.exec(ChipOp::LdVxNn { x: reg, nn: 0xAB });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.v[reg] == 0xAB);
     }
@@ -450,11 +450,11 @@ mod tests {
             ..Chip8::default()
         };
 
-        chip.exec(ChipOp::Add { x: reg, nn: 0xA0 });
+        chip.exec(ChipOp::AddVxNn { x: reg, nn: 0xA0 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.v[reg] == 0xA0);
 
-        chip.exec(ChipOp::Add { x: reg, nn: 0x0B });
+        chip.exec(ChipOp::AddVxNn { x: reg, nn: 0x0B });
         assert_eq!(chip.pc, 0x204);
         assert!(chip.v[reg] == 0xAB);
     }
@@ -469,7 +469,7 @@ mod tests {
         };
         chip.v[y] = 0xAB;
 
-        chip.exec(ChipOp::Ldr { x, y });
+        chip.exec(ChipOp::LdVxVy { x, y });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.v[x] == 0xAB);
     }
@@ -485,7 +485,7 @@ mod tests {
         chip.v[1] = 0;
         chip.i = img_loc;
         chip.memory[img_loc] = 0xAB;
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0xAB);
     }
@@ -501,7 +501,7 @@ mod tests {
         chip.v[1] = 0;
         chip.i = img_loc;
         chip.memory[img_loc] = 0b11110000;
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0b01111000);
     }
@@ -517,7 +517,7 @@ mod tests {
         chip.v[1] = 0;
         chip.i = img_loc;
         chip.memory[img_loc] = 0b11110000;
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0b00000011);
         assert!(chip.screen[0][1] == 0b11000000);
@@ -534,7 +534,7 @@ mod tests {
         chip.v[1] = 0;
         chip.i = img_loc;
         chip.memory[img_loc] = 0b11110000;
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 1 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][1] == 0b00000111);
         assert!(chip.screen[0][2] == 0b10000000);
@@ -555,7 +555,7 @@ mod tests {
         chip.memory[img_loc + 2] = 0x90;
         chip.memory[img_loc + 3] = 0x90;
         chip.memory[img_loc + 4] = 0xF0;
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 5 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[0][0] == 0xF0);
         assert!(chip.screen[1][0] == 0x90);
@@ -579,7 +579,7 @@ mod tests {
         chip.memory[img_loc + 2] = 0x90;
         chip.memory[img_loc + 3] = 0x90;
         chip.memory[img_loc + 4] = 0xF0;
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 5 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[1][0] == 0xF0);
         assert!(chip.screen[2][0] == 0x90);
@@ -603,7 +603,7 @@ mod tests {
         chip.memory[img_loc + 2] = 0x90;
         chip.memory[img_loc + 3] = 0x90;
         chip.memory[img_loc + 4] = 0xF0;
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 5 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.screen[1][0] == 0x0F);
         assert!(chip.screen[2][0] == 0x09);
@@ -629,12 +629,12 @@ mod tests {
         chip.memory[img_loc + 4] = 0xF0;
 
         // Test first drw has no collision
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 5 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 5 });
         assert!(chip.v[0xF] == 0);
         assert_eq!(chip.pc, 0x202);
 
         // Change offset and check that the collision flag is set
-        chip.exec(ChipOp::Drw { x: 0, y: 1, n: 4 });
+        chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 4 });
         assert!(chip.v[0x1] == 1);
         assert_eq!(chip.pc, 0x204);
     }

@@ -7,29 +7,29 @@ pub fn decode(op: u16) -> ChipOp {
             0x00EE => ChipOp::Ret,
             _ => ChipOp::Unknown(op),
         },
-        0x1000 => ChipOp::Jp {
+        0x1000 => ChipOp::JpNnn {
             nnn: (op & 0x0FFF) as usize,
         },
-        0x2000 => ChipOp::Call {
+        0x2000 => ChipOp::CallNnn {
             nnn: (op & 0x0FFF) as usize,
         },
-        0x3000 => ChipOp::Se {
+        0x3000 => ChipOp::SeVxNn {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
         },
-        0x4000 => ChipOp::Sne {
+        0x4000 => ChipOp::SneVxNn {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
         },
-        0x5000 => ChipOp::Ser {
+        0x5000 => ChipOp::SeVxVy {
             x: ((op & 0x0F00) >> 8) as usize,
             y: ((op & 0x00F0) >> 4) as usize,
         },
-        0x6000 => ChipOp::Ld {
+        0x6000 => ChipOp::LdVxNn {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
         },
-        0x7000 => ChipOp::Add {
+        0x7000 => ChipOp::AddVxNn {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
         },
@@ -37,43 +37,43 @@ pub fn decode(op: u16) -> ChipOp {
             let x = ((op & 0x0F00) >> 8) as usize;
             let y = ((op & 0x00F0) >> 4) as usize;
             match op & 0x000F {
-                0x0000 => ChipOp::Ldr { x, y },
-                0x0001 => ChipOp::Orr { x, y },
-                0x0002 => ChipOp::Andr { x, y },
-                0x0003 => ChipOp::Xorr { x, y },
-                0x0004 => ChipOp::Addr { x, y },
-                0x0005 => ChipOp::Subr { x, y },
-                0x0006 => ChipOp::Shrr { x, y },
-                0x0007 => ChipOp::Subnr { x, y },
-                0x000E => ChipOp::Shlr { x, y },
+                0x0000 => ChipOp::LdVxVy { x, y },
+                0x0001 => ChipOp::OrVxVy { x, y },
+                0x0002 => ChipOp::AndVxVy { x, y },
+                0x0003 => ChipOp::XorVxVy { x, y },
+                0x0004 => ChipOp::AddVxVy { x, y },
+                0x0005 => ChipOp::SubVxVy { x, y },
+                0x0006 => ChipOp::ShrVxVy { x, y },
+                0x0007 => ChipOp::SubnVxVy { x, y },
+                0x000E => ChipOp::ShlVxVy { x, y },
                 _ => ChipOp::Unknown(op),
             }
         }
         0x9000 => match op & 0x000F {
-            0x0000 => ChipOp::Sner {
+            0x0000 => ChipOp::SneVxVy {
                 x: ((op & 0x0F00) >> 8) as usize,
                 y: ((op & 0x00F0) >> 4) as usize,
             },
             _ => ChipOp::Unknown(op),
         },
-        0xA000 => ChipOp::Ldi {
+        0xA000 => ChipOp::LdINnn {
             nnn: (op & 0x0FFF) as usize,
         },
-        0xB000 => ChipOp::Jpo { nnn: op & 0x0FFF },
-        0xC000 => ChipOp::Rnd {
+        0xB000 => ChipOp::JpV0Nnn { nnn: op & 0x0FFF },
+        0xC000 => ChipOp::RndVxNn {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
         },
-        0xD000 => ChipOp::Drw {
+        0xD000 => ChipOp::DrwVxVyN {
             x: ((op & 0x0F00) >> 8) as usize,
             y: ((op & 0x00F0) >> 4) as usize,
             n: (op & 0x000F) as u8,
         },
         0xE000 => match op & 0x00FF {
-            0x009E => ChipOp::Skp {
+            0x009E => ChipOp::SkpVx {
                 x: ((op & 0x0F00) >> 8) as usize,
             },
-            0x00A1 => ChipOp::Sknp {
+            0x00A1 => ChipOp::SknpVx {
                 x: ((op & 0x0F00) >> 8) as usize,
             },
             _ => ChipOp::Unknown(op),
@@ -81,15 +81,15 @@ pub fn decode(op: u16) -> ChipOp {
         0xF000 => {
             let x = ((op & 0x0F00) >> 8) as usize;
             match op & 0x00FF {
-                0x0015 => ChipOp::Lddv { x },
-                0x0007 => ChipOp::Ldk { x },
-                0x000A => ChipOp::Ldvd { x },
-                0x0018 => ChipOp::Ldsv { x },
-                0x001E => ChipOp::Addi { x },
-                0x0029 => ChipOp::Ldfv { x },
-                0x0033 => ChipOp::Ldbv { x },
-                0x0055 => ChipOp::Ldiv { x },
-                0x0065 => ChipOp::Ldvi { x },
+                0x0015 => ChipOp::LdDtVx { x },
+                0x0007 => ChipOp::LdVxDt { x },
+                0x000A => ChipOp::LdVxK { x },
+                0x0018 => ChipOp::LdStVx { x },
+                0x001E => ChipOp::AddIVx { x },
+                0x0029 => ChipOp::LdFVx { x },
+                0x0033 => ChipOp::LdBVx { x },
+                0x0055 => ChipOp::LdIVx { x },
+                0x0065 => ChipOp::LdVxI { x },
                 _ => ChipOp::Unknown(op),
             }
         }
