@@ -196,8 +196,10 @@ mod tui {
             event::{
                 KeyboardEnhancementFlags, PopKeyboardEnhancementFlags, PushKeyboardEnhancementFlags,
             },
+            style::Print,
             terminal::{
-                disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+                disable_raw_mode, enable_raw_mode, supports_keyboard_enhancement,
+                EnterAlternateScreen, LeaveAlternateScreen,
             },
             ExecutableCommand,
         },
@@ -208,18 +210,27 @@ mod tui {
     pub fn init_terminal() -> color_eyre::Result<Terminal<impl Backend>> {
         enable_raw_mode()?;
         stdout().execute(EnterAlternateScreen)?;
-        stdout().execute(PushKeyboardEnhancementFlags(
-            KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
-                | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
-                | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES,
-        ))?;
+
+        // Check if kitty keyboard protocol is supported before enabling
+        if supports_keyboard_enhancement()? {
+            // Then set enhancement flags
+            stdout().execute(PushKeyboardEnhancementFlags(
+                KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+                    | KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+                    | KeyboardEnhancementFlags::REPORT_ALL_KEYS_AS_ESCAPE_CODES,
+            ))?;
+        } else {
+            panic!("Terminal must support kitty keyboard enhancements");
+        }
+
         let terminal = Terminal::new(CrosstermBackend::new(stdout()))?;
         Ok(terminal)
     }
 
     pub fn restore_terminal() -> color_eyre::Result<()> {
+        // Disable kitty keyboard protocol with CSI < u
+        stdout().execute(PopKeyboardEnhancementFlags)?;
         stdout().execute(LeaveAlternateScreen)?;
-        let _ = stdout().execute(PopKeyboardEnhancementFlags);
         disable_raw_mode()?;
         Ok(())
     }
@@ -227,8 +238,8 @@ mod tui {
     pub fn install_panic_hook() {
         let original_hook = panic::take_hook();
         panic::set_hook(Box::new(move |panic_info| {
+            stdout().execute(PopKeyboardEnhancementFlags).unwrap();
             stdout().execute(LeaveAlternateScreen).unwrap();
-            let _ = stdout().execute(PopKeyboardEnhancementFlags);
             disable_raw_mode().unwrap();
             original_hook(panic_info);
         }));

@@ -143,19 +143,19 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
     f.render_widget(cmd_table, chunks[2]);
 }
 
-pub fn view(chip: &Chip8, frame: &mut Frame, _debug: bool) {
+pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
     let main_area = frame.area();
 
-    let [left_area, _right_area] =
+    let [left_area, right_area] =
         Layout::horizontal([Constraint::Length(68), Constraint::Percentage(60)]).areas(main_area);
 
     let outer_left_block = Block::bordered().title("Oxid-8");
     let inner_left = outer_left_block.inner(left_area);
 
     frame.render_widget(outer_left_block, left_area);
-    // if debug {
-    //     render_chip8_debug(frame, right_area, chip);
-    // }
+    if debug {
+        render_chip8_debug(frame, right_area, chip);
+    }
 
     let buf = frame.buffer_mut();
     for y in 0..16 {
