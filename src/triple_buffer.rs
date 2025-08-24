@@ -1,4 +1,4 @@
-//! Lock-free triple buffering for high-frequency producer-consumer scenarios.
+//! Wait-free triple buffering for high-frequency producer-consumer scenarios.
 //!
 //! This module provides a triple buffer implementation that allows a single
 //! producer to continuously write data while a single consumer reads the most
@@ -34,7 +34,7 @@
 //! Triple buffers are ideal for scenarios where:
 //! - A producer generates data at high frequency (e.g., game state, video frames)
 //! - A consumer needs the most recent data but can skip intermediate updates
-//! - Lock-free operation is required for performance or real-time constraints
+//! - Wait-free operation is required for performance or real-time constraints
 //! - The producer and consumer operate at different frequencies
 //!
 //! # Examples
@@ -77,9 +77,8 @@
 //! ## Performance Characteristics
 //!
 //! - **Lock-free**: No mutex or other blocking synchronization primitives
-//! - **Wait-free reads**: Reader never blocks, always gets most recent data
-//! - **Wait-free writes**: Writer never blocks, immediate access to write buffer
-//! - **Cache-friendly**: Minimizes false sharing between producer and consumer
+//! - **Wait-free reads**: Reader never blocks, always gets immediate access to a read buffer
+//! - **Wait-free writes**: Writer never blocks, always gets immediate access to a write buffer
 //!
 //! ## Thread Safety
 //!
@@ -171,7 +170,7 @@ pub fn triple_buffer<T: Copy>(initial: T) -> (TripleBufferWriter<T>, TripleBuffe
 ///
 /// This struct tracks which of the three buffers is currently being used for
 /// reading, which is ready to be read, and which is being written to. The state
-/// can be atomically encoded into a `u64` for lock-free synchronization between
+/// can be atomically encoded into a `u64` for wait-free synchronization between
 /// reader and writer threads.
 ///
 /// # Buffer Indices
@@ -233,7 +232,7 @@ impl BufferState {
     ///
     /// This function extracts the buffer indices and dirty flag from a
     /// bit-packed `u64` value, typically read from an atomic variable
-    /// for lock-free synchronization.
+    /// for wait-free synchronization.
     ///
     /// # Examples
     ///
@@ -258,7 +257,7 @@ impl BufferState {
     ///
     /// This function packs the buffer indices and dirty flag into a
     /// single `u64` value that can be stored in an atomic variable
-    /// for lock-free synchronization between threads.
+    /// for wait-free synchronization between threads.
     ///
     /// # Examples
     ///
@@ -282,7 +281,7 @@ impl BufferState {
     }
 }
 
-/// A lock-free triple buffer for single-producer single-consumer communication.
+/// A wait-free triple buffer for single-producer single-consumer communication.
 ///
 /// The triple buffer maintains three internal buffers to enable wait-free communication
 /// between a writer and reader thread. While the writer updates one buffer and the reader
@@ -361,9 +360,13 @@ impl<T: Copy> TripleBuffer<T> {
 impl<T> TripleBuffer<T> {
     /// Returns the current buffer state.
     ///
+    /// # Synchronization
+    ///
     /// This performs an atomic load with `Acquire` ordering to ensure
     /// visibility of all writes that happened-before the state change.
     fn state(&self) -> BufferState {
+        // No special handling is required here because, while reader and writer live in different
+        // threads, they each only to use this to read state set by their own thread.
         let current = self.encoded_state.load(Ordering::Acquire);
         BufferState::decode(current)
     }
@@ -383,37 +386,45 @@ impl<T> TripleBuffer<T> {
     /// Uses a compare-exchange loop with weak failure ordering for performance.
     /// The `Release` ordering on success ensures the read operation happens-before
     /// any subsequent write operations that observe the new state.
+    ///
+    /// If there is contention, rather than run a CAS loop, we return the current state
+    /// without updating it. This keeps the algorithm wait-free and is safe because
+    /// while state needs to be updated atomically, only the 'ready' buffer is in contention
+    /// between threads, and it is always safe to read from the current read buffer.
     fn try_swap_read(&self) -> BufferState {
-        loop {
-            let current = self.encoded_state.load(Ordering::Acquire);
-            let state = BufferState::decode(current);
+        let current = self.encoded_state.load(Ordering::Acquire);
+        let current_state = BufferState::decode(current);
 
-            // No new data available, return current state
-            if !state.dirty {
-                return state;
-            }
+        // No new data available, return current state
+        if !current_state.dirty {
+            return current_state;
+        }
 
-            // Swap read and ready buffers, clear dirty flag
-            let mut new_state = state;
-            new_state.ready_idx = state.read_idx;
-            new_state.read_idx = state.ready_idx;
-            new_state.dirty = false;
+        // Swap read and ready buffers, clear dirty flag
+        let mut new_state = current_state;
+        new_state.ready_idx = current_state.read_idx;
+        new_state.read_idx = current_state.ready_idx;
+        new_state.dirty = false;
 
-            let new = new_state.encode();
-            if self
-                .encoded_state
-                .compare_exchange_weak(current, new, Ordering::Release, Ordering::Acquire)
-                .is_ok()
-            {
-                return new_state;
-            }
+        // Try state update, if this fails return the current state
+        let new = new_state.encode();
+        if self
+            .encoded_state
+            .compare_exchange_weak(current, new, Ordering::Release, Ordering::Acquire)
+            .is_ok()
+        {
+            new_state
+        } else {
+            current_state
         }
     }
 
     /// Swaps the write buffer with the ready buffer to publish written data.
     ///
-    /// This operation is wait-free and always succeeds in making the current
-    /// write buffer contents available to the reader as the new ready buffer.
+    /// This operation is wait-free with a bounded number of retries (default: 1 retry).
+    /// If contention occurs, it will retry the swap up to the specified limit, then
+    /// return the current state. This maintains wait-free semantics since the number
+    /// of attempts is bounded and finite.
     ///
     /// # Returns
     ///
@@ -421,9 +432,14 @@ impl<T> TripleBuffer<T> {
     ///
     /// # Synchronization
     ///
-    /// Uses a compare-exchange loop to atomically update the state.
+    /// Uses compare-exchange operations to atomically update the state with bounded retries.
     /// The `Release` ordering ensures all writes to the buffer happen-before
     /// the state change becomes visible to the reader.
+    ///
+    /// After the bounded retry limit is reached, we return the current state
+    /// without updating it. This keeps the algorithm wait-free and is safe because
+    /// while state needs to be updated atomically, only the 'ready' buffer is in contention
+    /// between threads, and it is always safe to write to the current write buffer.
     ///
     /// # Note
     ///
@@ -431,16 +447,31 @@ impl<T> TripleBuffer<T> {
     /// even if the reader hasn't consumed the previous update. This allows
     /// the reader to skip intermediate updates when running at a lower
     /// frequency than the writer.
+    ///
+    /// By default, this will retry once if the initial compare_exchange fails due to contention.
     fn swap_write(&self) -> BufferState {
-        loop {
-            let current = self.encoded_state.load(Ordering::Acquire);
-            let state = BufferState::decode(current);
+        self.swap_write_retry(1)
+    }
 
-            let mut new_state = state;
-            new_state.write_idx = state.ready_idx;
-            new_state.ready_idx = state.write_idx;
+    /// Same as `swap_write`, but allows specifying the number of retries on contention.
+    ///
+    /// This can be useful in high-contention scenarios where you want to make a best effort
+    /// to publish the update rather than immediately falling back to the current state.
+    ///
+    /// # Parameters
+    ///
+    /// * `retries` - Number of times to retry the compare_exchange on failure (total attempts = retries + 1)
+    fn swap_write_retry(&self, retries: usize) -> BufferState {
+        for _ in 0..=retries {
+            let current = self.encoded_state.load(Ordering::Acquire);
+            let current_state = BufferState::decode(current);
+
+            let mut new_state = current_state;
+            new_state.write_idx = current_state.ready_idx;
+            new_state.ready_idx = current_state.write_idx;
             new_state.dirty = true;
 
+            // Try state update, if this fails retry
             let new = new_state.encode();
             if self
                 .encoded_state
@@ -450,6 +481,9 @@ impl<T> TripleBuffer<T> {
                 return new_state;
             }
         }
+        // If all attempts failed, return the last current state
+        let current = self.encoded_state.load(Ordering::Acquire);
+        BufferState::decode(current)
     }
 }
 
