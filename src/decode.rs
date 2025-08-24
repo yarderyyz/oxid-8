@@ -15,11 +15,11 @@ pub fn decode(op: u16) -> ChipOp {
         },
         0x3000 => ChipOp::Se {
             x: ((op & 0x0F00) >> 8) as usize,
-            kk: (op & 0x00FF) as u8,
+            nn: (op & 0x00FF) as u8,
         },
         0x4000 => ChipOp::Sne {
             x: ((op & 0x0F00) >> 8) as usize,
-            kk: (op & 0x00FF) as u8,
+            nn: (op & 0x00FF) as u8,
         },
         0x5000 => ChipOp::Ser {
             x: ((op & 0x0F00) >> 8) as usize,
@@ -27,11 +27,11 @@ pub fn decode(op: u16) -> ChipOp {
         },
         0x6000 => ChipOp::Ld {
             x: ((op & 0x0F00) >> 8) as usize,
-            kk: (op & 0x00FF) as u8,
+            nn: (op & 0x00FF) as u8,
         },
         0x7000 => ChipOp::Add {
             x: ((op & 0x0F00) >> 8) as usize,
-            kk: (op & 0x00FF) as u8,
+            nn: (op & 0x00FF) as u8,
         },
         0x8000 => {
             let x = ((op & 0x0F00) >> 8) as usize;
@@ -62,7 +62,7 @@ pub fn decode(op: u16) -> ChipOp {
         0xB000 => ChipOp::Jpo { nnn: op & 0x0FFF },
         0xC000 => ChipOp::Rnd {
             x: ((op & 0x0F00) >> 8) as usize,
-            kk: (op & 0x00FF) as u8,
+            nn: (op & 0x00FF) as u8,
         },
         0xD000 => ChipOp::Drw {
             x: ((op & 0x0F00) >> 8) as usize,

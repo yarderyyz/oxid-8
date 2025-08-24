@@ -78,15 +78,15 @@ impl Chip8 {
                 self.stack[self.sp - 1] = self.pc + 2;
                 self.pc = nnn;
             }
-            Se { x, kk } => {
-                if self.v[x] == kk {
+            Se { x, nn } => {
+                if self.v[x] == nn {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
                 }
             }
-            Sne { x, kk } => {
-                if *self.vx(x) != kk {
+            Sne { x, nn } => {
+                if *self.vx(x) != nn {
                     self.pc += 4;
                 } else {
                     self.pc += 2;
@@ -99,13 +99,13 @@ impl Chip8 {
                     self.pc += 2;
                 }
             }
-            Ld { x, kk } => {
-                *self.vx(x) = kk;
+            Ld { x, nn } => {
+                *self.vx(x) = nn;
                 self.pc += 2;
             }
-            Add { x, kk } => {
+            Add { x, nn } => {
                 let r = self.vx(x);
-                *r = r.wrapping_add(kk);
+                *r = r.wrapping_add(nn);
                 self.pc += 2;
             }
             Ldr { x, y } => {
@@ -182,9 +182,9 @@ impl Chip8 {
             Jpo { nnn } => {
                 self.pc = (nnn + (*self.vx(0) as u16)) as usize;
             }
-            Rnd { x, kk } => {
+            Rnd { x, nn } => {
                 let n: u8 = random!();
-                *self.vx(x) = n & kk;
+                *self.vx(x) = n & nn;
                 self.pc += 2;
             }
             Drw { x, y, n } => {
@@ -363,7 +363,7 @@ mod tests {
         };
         chip.v[0] = 20;
 
-        chip.exec(ChipOp::Se { x: 0, kk: 20 });
+        chip.exec(ChipOp::Se { x: 0, nn: 20 });
         assert!(chip.pc == 0x204);
     }
 
@@ -375,7 +375,7 @@ mod tests {
         };
         chip.v[1] = 10;
 
-        chip.exec(ChipOp::Se { x: 1, kk: 20 });
+        chip.exec(ChipOp::Se { x: 1, nn: 20 });
         assert!(chip.pc == 0x202);
     }
 
@@ -387,7 +387,7 @@ mod tests {
         };
         chip.v[0] = 20;
 
-        chip.exec(ChipOp::Sne { x: 0, kk: 20 });
+        chip.exec(ChipOp::Sne { x: 0, nn: 20 });
         assert!(chip.pc == 0x202);
     }
 
@@ -399,7 +399,7 @@ mod tests {
         };
         chip.v[1] = 10;
 
-        chip.exec(ChipOp::Sne { x: 1, kk: 20 });
+        chip.exec(ChipOp::Sne { x: 1, nn: 20 });
         assert!(chip.pc == 0x204);
     }
 
@@ -437,7 +437,7 @@ mod tests {
             ..Chip8::default()
         };
 
-        chip.exec(ChipOp::Ld { x: reg, kk: 0xAB });
+        chip.exec(ChipOp::Ld { x: reg, nn: 0xAB });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.v[reg] == 0xAB);
     }
@@ -450,11 +450,11 @@ mod tests {
             ..Chip8::default()
         };
 
-        chip.exec(ChipOp::Add { x: reg, kk: 0xA0 });
+        chip.exec(ChipOp::Add { x: reg, nn: 0xA0 });
         assert_eq!(chip.pc, 0x202);
         assert!(chip.v[reg] == 0xA0);
 
-        chip.exec(ChipOp::Add { x: reg, kk: 0x0B });
+        chip.exec(ChipOp::Add { x: reg, nn: 0x0B });
         assert_eq!(chip.pc, 0x204);
         assert!(chip.v[reg] == 0xAB);
     }
