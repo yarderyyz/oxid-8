@@ -372,10 +372,7 @@ mod tests {
     #[test]
     fn test_exec_call() {
         let addr = 0xABC;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
 
         chip.exec(ChipOp::CallNnn { nnn: addr });
         assert!(chip.sp == 1);
@@ -384,10 +381,7 @@ mod tests {
 
     #[test]
     fn test_exec_se_skip() {
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 20;
 
         chip.exec(ChipOp::SeVxNn { x: 0, nn: 20 });
@@ -396,10 +390,7 @@ mod tests {
 
     #[test]
     fn test_exec_se_no_skip() {
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[1] = 10;
 
         chip.exec(ChipOp::SeVxNn { x: 1, nn: 20 });
@@ -408,10 +399,7 @@ mod tests {
 
     #[test]
     fn test_exec_sne_no_skip() {
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 20;
 
         chip.exec(ChipOp::SneVxNn { x: 0, nn: 20 });
@@ -420,10 +408,7 @@ mod tests {
 
     #[test]
     fn test_exec_sne_skip() {
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[1] = 10;
 
         chip.exec(ChipOp::SneVxNn { x: 1, nn: 20 });
@@ -432,10 +417,7 @@ mod tests {
 
     #[test]
     fn test_exec_ser_skip() {
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 20;
         chip.v[1] = 20;
 
@@ -445,10 +427,7 @@ mod tests {
 
     #[test]
     fn test_exec_ser_no_skip() {
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 20;
         chip.v[1] = 17;
 
@@ -459,10 +438,7 @@ mod tests {
     #[test]
     fn test_exec_ld() {
         let reg = 3;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
 
         chip.exec(ChipOp::LdVxNn { x: reg, nn: 0xAB });
         assert_eq!(chip.pc, 0x202);
@@ -472,10 +448,7 @@ mod tests {
     #[test]
     fn test_exec_add() {
         let reg = 3;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
 
         chip.exec(ChipOp::AddVxNn { x: reg, nn: 0xA0 });
         assert_eq!(chip.pc, 0x202);
@@ -490,10 +463,7 @@ mod tests {
     fn test_exec_ldr() {
         let x = 3;
         let y = 5;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[y] = 0xAB;
 
         chip.exec(ChipOp::LdVxVy { x, y });
@@ -504,10 +474,7 @@ mod tests {
     #[test]
     fn test_run_drw_row() {
         let img_loc = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 0;
         chip.v[1] = 0;
         chip.i = img_loc;
@@ -520,10 +487,7 @@ mod tests {
     #[test]
     fn test_run_drw_row_x_offset() {
         let img_loc = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 1;
         chip.v[1] = 0;
         chip.i = img_loc;
@@ -536,10 +500,7 @@ mod tests {
     #[test]
     fn test_run_drw_row_x_offset_byte_boundary() {
         let img_loc = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 6;
         chip.v[1] = 0;
         chip.i = img_loc;
@@ -553,10 +514,7 @@ mod tests {
     #[test]
     fn test_run_drw_row_x_offset_big() {
         let img_loc = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 13;
         chip.v[1] = 0;
         chip.i = img_loc;
@@ -570,10 +528,7 @@ mod tests {
     #[test]
     fn test_run_drw_zero() {
         let img_loc: usize = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 0;
         chip.v[1] = 0;
         chip.i = img_loc;
@@ -594,10 +549,7 @@ mod tests {
     #[test]
     fn test_run_drw_zero_y_offset() {
         let img_loc: usize = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 0;
         chip.v[1] = 1;
         chip.i = img_loc;
@@ -618,10 +570,7 @@ mod tests {
     #[test]
     fn test_run_drw_zero_xy_offset() {
         let img_loc: usize = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 4;
         chip.v[1] = 1;
         chip.i = img_loc;
@@ -642,10 +591,7 @@ mod tests {
     #[test]
     fn test_run_drw_test_collision() {
         let img_loc: usize = 0x400;
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
         chip.v[0] = 4;
         chip.v[1] = 1;
         chip.i = img_loc;
@@ -668,10 +614,7 @@ mod tests {
 
     #[test]
     fn test_exec_clr() {
-        let mut chip = Chip8 {
-            pc: 0x200,
-            ..Chip8::default()
-        };
+        let mut chip = Chip8::new();
 
         chip.screen[(0, 0)] = 0xFF;
         chip.screen[(10, 5)] = 0x0F;
