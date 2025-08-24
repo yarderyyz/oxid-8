@@ -20,7 +20,7 @@ pub const CHIP8_FONTSET: [u8; 80] = [
 pub const PROGRAM_START: usize = 0x200;
 pub const WINDOW: isize = 8;
 
-pub const W: usize = 8;
-pub const H: usize = 32;
+pub const W: usize = 16;
+pub const H: usize = 64;
 
 pub const RAM_SIZE: usize = 4096;

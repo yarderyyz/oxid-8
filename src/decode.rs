@@ -5,6 +5,8 @@ pub fn decode(op: u16) -> ChipOp {
         0x0000 => match op {
             0x00E0 => ChipOp::Cls,
             0x00EE => ChipOp::Ret,
+            0x00FE => ChipOp::LowRes,
+            0x00FF => ChipOp::HighRes,
             _ => ChipOp::Unknown(op),
         },
         0x1000 => ChipOp::JpNnn {

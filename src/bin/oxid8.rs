@@ -12,8 +12,7 @@ use std::thread;
 use std::time::Duration;
 
 use oxid8::audio::Beeper;
-use oxid8::consts::PROGRAM_START;
-use oxid8::consts::RAM_SIZE;
+use oxid8::consts::{H, PROGRAM_START, RAM_SIZE, W};
 use oxid8::cpu::{Chip8, Screen};
 use oxid8::triple_buffer;
 use oxid8::{gfx, timers};
@@ -79,7 +78,7 @@ fn main() -> color_eyre::Result<()> {
     let timer_rx = timers::spawn_timers(chip.dt.clone(), chip.st.clone());
 
     // Setup async rendering thread using a BufChannel for communication.
-    let (mut buf_tx, buf_rx) = triple_buffer::triple_buffer::<Screen>(Screen::default());
+    let (mut buf_tx, buf_rx) = triple_buffer::triple_buffer::<Screen>(Screen::default((H, W)));
     let running_state = model.running_state.clone();
     let render_join_handle = thread::spawn(move || {
         while running_state.load(Ordering::Acquire) != RunningState::Done {
@@ -117,7 +116,7 @@ fn main() -> color_eyre::Result<()> {
 
         {
             let mut send_handle = buf_tx.write();
-            *send_handle = chip.screen;
+            *send_handle = chip.screen.clone(); // must clone here as screen is causal
         }
 
         // Run input

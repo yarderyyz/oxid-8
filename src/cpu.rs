@@ -1,3 +1,4 @@
+use ndarray::Array2;
 use random_number::random;
 
 use crate::mem::Memory;
@@ -11,12 +12,20 @@ use std::sync::{
 use crate::consts::{CHIP8_FONTSET, H, W};
 
 #[derive(Default)]
+pub enum Resolution {
+    #[default]
+    Low,
+    High,
+}
+
+#[derive(Default)]
 pub enum KeyState {
     #[default]
     AwaitingPress,
     AwaitingRelease,
 }
-pub type Screen = [[u8; W]; H];
+
+pub type Screen = Array2<u8>;
 
 #[derive(Default)]
 pub struct Chip8 {
@@ -30,6 +39,7 @@ pub struct Chip8 {
     pub stack: [usize; 16],
     pub screen: Screen,
     pub memory: Memory,
+    pub resolution: Resolution,
     pub key_state: KeyState,
     pub last_key: u8,
 }
@@ -38,6 +48,7 @@ impl Chip8 {
     pub fn new() -> Self {
         Chip8 {
             pc: PROGRAM_START,
+            screen: Array2::<u8>::zeros((H, W)),
             ..Chip8::default()
         }
     }
@@ -63,12 +74,20 @@ impl Chip8 {
         use ChipOp::*;
         match op {
             Cls => {
-                self.screen.fill([0; W]);
+                self.screen.fill(0);
                 self.pc += 2;
             }
             Ret => {
                 self.pc = self.stack[self.sp - 1];
                 self.sp -= 1;
+            }
+            LowRes => {
+                self.resolution = Resolution::Low;
+                self.pc += 2;
+            }
+            HighRes => {
+                self.resolution = Resolution::High;
+                self.pc += 2;
             }
             JpNnn { nnn } => {
                 self.pc = nnn;
@@ -194,8 +213,7 @@ impl Chip8 {
                 let col_byte = vx >> 3; // vx / 8
                 let height = n as usize;
 
-                let rows = self.screen.len();
-                let bytes_per_row = self.screen[0].len();
+                let (rows, bytes_per_row) = self.screen.dim();
 
                 // collision flag (VF)
                 self.v[0xF] = 0;
@@ -210,11 +228,11 @@ impl Chip8 {
                     let [hi, lo] = shifted.to_be_bytes();
 
                     // Cache low and hi bytes to check collision flag
-                    let before0 = self.screen[y_idx][x0];
-                    let before1 = self.screen[y_idx][x1];
+                    let before0 = self.screen[(y_idx, x0)];
+                    let before1 = self.screen[(y_idx, x1)];
 
-                    self.screen[y_idx][x0] ^= hi;
-                    self.screen[y_idx][x1] ^= lo;
+                    self.screen[(y_idx, x0)] ^= hi;
+                    self.screen[(y_idx, x1)] ^= lo;
 
                     // Check and set collision flag (VF)
                     if (before0 & hi != 0) || (before1 & lo != 0) {
@@ -487,7 +505,7 @@ mod tests {
         chip.memory[img_loc] = 0xAB;
         chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
-        assert!(chip.screen[0][0] == 0xAB);
+        assert!(chip.screen[(0, 0)] == 0xAB);
     }
 
     #[test]
@@ -503,7 +521,7 @@ mod tests {
         chip.memory[img_loc] = 0b11110000;
         chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
-        assert!(chip.screen[0][0] == 0b01111000);
+        assert!(chip.screen[(0, 0)] == 0b01111000);
     }
 
     #[test]
@@ -519,8 +537,8 @@ mod tests {
         chip.memory[img_loc] = 0b11110000;
         chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
-        assert!(chip.screen[0][0] == 0b00000011);
-        assert!(chip.screen[0][1] == 0b11000000);
+        assert!(chip.screen[(0, 0)] == 0b00000011);
+        assert!(chip.screen[(0, 1)] == 0b11000000);
     }
 
     #[test]
@@ -536,8 +554,8 @@ mod tests {
         chip.memory[img_loc] = 0b11110000;
         chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 1 });
         assert_eq!(chip.pc, 0x202);
-        assert!(chip.screen[0][1] == 0b00000111);
-        assert!(chip.screen[0][2] == 0b10000000);
+        assert!(chip.screen[(0, 1)] == 0b00000111);
+        assert!(chip.screen[(0, 2)] == 0b10000000);
     }
 
     #[test]
@@ -557,11 +575,11 @@ mod tests {
         chip.memory[img_loc + 4] = 0xF0;
         chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 5 });
         assert_eq!(chip.pc, 0x202);
-        assert!(chip.screen[0][0] == 0xF0);
-        assert!(chip.screen[1][0] == 0x90);
-        assert!(chip.screen[2][0] == 0x90);
-        assert!(chip.screen[3][0] == 0x90);
-        assert!(chip.screen[4][0] == 0xF0);
+        assert!(chip.screen[(0, 0)] == 0xF0);
+        assert!(chip.screen[(1, 0)] == 0x90);
+        assert!(chip.screen[(2, 0)] == 0x90);
+        assert!(chip.screen[(3, 0)] == 0x90);
+        assert!(chip.screen[(4, 0)] == 0xF0);
     }
 
     #[test]
@@ -581,11 +599,11 @@ mod tests {
         chip.memory[img_loc + 4] = 0xF0;
         chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 5 });
         assert_eq!(chip.pc, 0x202);
-        assert!(chip.screen[1][0] == 0xF0);
-        assert!(chip.screen[2][0] == 0x90);
-        assert!(chip.screen[3][0] == 0x90);
-        assert!(chip.screen[4][0] == 0x90);
-        assert!(chip.screen[5][0] == 0xF0);
+        assert!(chip.screen[(1, 0)] == 0xF0);
+        assert!(chip.screen[(2, 0)] == 0x90);
+        assert!(chip.screen[(3, 0)] == 0x90);
+        assert!(chip.screen[(4, 0)] == 0x90);
+        assert!(chip.screen[(5, 0)] == 0xF0);
     }
 
     #[test]
@@ -605,11 +623,11 @@ mod tests {
         chip.memory[img_loc + 4] = 0xF0;
         chip.exec(ChipOp::DrwVxVyN { x: 0, y: 1, n: 5 });
         assert_eq!(chip.pc, 0x202);
-        assert!(chip.screen[1][0] == 0x0F);
-        assert!(chip.screen[2][0] == 0x09);
-        assert!(chip.screen[3][0] == 0x09);
-        assert!(chip.screen[4][0] == 0x09);
-        assert!(chip.screen[5][0] == 0x0F);
+        assert!(chip.screen[(1, 0)] == 0x0F);
+        assert!(chip.screen[(2, 0)] == 0x09);
+        assert!(chip.screen[(3, 0)] == 0x09);
+        assert!(chip.screen[(4, 0)] == 0x09);
+        assert!(chip.screen[(5, 0)] == 0x0F);
     }
 
     #[test]
@@ -646,13 +664,13 @@ mod tests {
             ..Chip8::default()
         };
 
-        chip.screen[0][0] = 0xFF;
-        chip.screen[10][5] = 0x0F;
+        chip.screen[(0, 0)] = 0xFF;
+        chip.screen[(10, 5)] = 0x0F;
         chip.v[0xF] = 1;
 
         chip.exec(ChipOp::Cls);
         assert_eq!(chip.pc, 0x202);
 
-        assert!(chip.screen.iter().all(|row| row.iter().all(|&b| b == 0)));
+        assert_eq!(chip.screen.iter().sum::<u8>(), 0);
     }
 }

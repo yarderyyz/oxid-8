@@ -160,8 +160,8 @@ pub fn view(screen: &Screen, frame: &mut Frame, _debug: bool) {
     let buf = frame.buffer_mut();
     for y in 0..16 {
         for x in 0..8 {
-            let mut fg = screen[y * 2][x];
-            let mut bg = screen[(y * 2) + 1][x];
+            let mut fg = screen[(y * 2, x)];
+            let mut bg = screen[((y * 2) + 1, x)];
 
             let x_buf = (x * 8) as u16 + inner_left.x;
             let y_buf = y as u16 + inner_left.y;
