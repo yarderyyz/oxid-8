@@ -2,8 +2,12 @@ use std::fmt;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ChipOp {
+    ScdN { n: u8 },
+    ScuN { n: u8 },
     Cls,
     Ret,
+    Scr,
+    Scl,
     Exit,
     LowRes,
     HighRes,
@@ -46,8 +50,12 @@ impl fmt::Debug for ChipOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ChipOp::*;
         let name = match self {
+            ScdN { .. } => "ScdN",
+            ScuN { .. } => "ScuN",
             Cls => "Cls",
             Ret => "Ret",
+            Scr => "Scr",
+            Scl => "Scl",
             Exit => "Ret",
             LowRes => "HighRes",
             HighRes => "LowRes",
@@ -93,8 +101,12 @@ impl fmt::Display for ChipOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use ChipOp::*;
         match *self {
+            ScdN { n } => write!(f, "SCD {n:X}"),
+            ScuN { n } => write!(f, "SCU {n:X}"),
             Cls => write!(f, "CLS"),
             Ret => write!(f, "RET"),
+            Scr => write!(f, "SCR"),
+            Scl => write!(f, "SCL"),
             Exit => write!(f, "EXIT"),
             LowRes => write!(f, "HIGH"),
             HighRes => write!(f, "LOW"),

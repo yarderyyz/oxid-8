@@ -2,12 +2,27 @@ use crate::op::ChipOp;
 
 pub fn decode(op: u16) -> ChipOp {
     match op & 0xF000 {
-        0x0000 => match op {
-            0x00E0 => ChipOp::Cls,
-            0x00EE => ChipOp::Ret,
-            0x00FD => ChipOp::Exit,
-            0x00FE => ChipOp::LowRes,
-            0x00FF => ChipOp::HighRes,
+        0x0000 => match op & 0xF0 {
+            0x00C0 => ChipOp::ScdN {
+                n: (op & 0xF) as u8,
+            },
+            0x00D0 => ChipOp::ScuN {
+                n: (op & 0xF) as u8,
+            },
+
+            0x00E0 => match op & 0xF {
+                0x0 => ChipOp::Cls,
+                0xE => ChipOp::Ret,
+                _ => ChipOp::Unknown(op),
+            },
+            0x00F0 => match op & 0xF {
+                0xB => ChipOp::Scr,
+                0xC => ChipOp::Scl,
+                0xD => ChipOp::Exit,
+                0xE => ChipOp::LowRes,
+                0xF => ChipOp::HighRes,
+                _ => ChipOp::Unknown(op),
+            },
             _ => ChipOp::Unknown(op),
         },
         0x1000 => ChipOp::JpNnn {

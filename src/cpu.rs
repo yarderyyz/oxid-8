@@ -83,6 +83,35 @@ impl Chip8 {
     pub fn exec(&mut self, op: ChipOp) {
         use ChipOp::*;
         match op {
+            ScdN { n } => {
+                let screen = self.screen.clone();
+                for (y, mut row) in self.screen.outer_iter_mut().enumerate() {
+                    for (x, elem) in row.iter_mut().enumerate() {
+                        let y_shifted: i16 = (y as i16) - (n as i16);
+                        if y_shifted >= 0 {
+                            *elem = screen[(y_shifted as usize, x)]
+                        } else {
+                            *elem = 0;
+                        }
+                    }
+                }
+                self.pc += 2;
+            }
+            ScuN { n } => {
+                let screen = self.screen.clone();
+                let (nrows, _) = self.screen.dim();
+                for (y, mut row) in self.screen.outer_iter_mut().enumerate() {
+                    for (x, elem) in row.iter_mut().enumerate() {
+                        let y_shifted: usize = y + (n as usize);
+                        if y_shifted < nrows {
+                            *elem = screen[(y_shifted, x)]
+                        } else {
+                            *elem = 0;
+                        }
+                    }
+                }
+                self.pc += 2;
+            }
             Cls => {
                 self.screen.fill(0);
                 self.pc += 2;
@@ -90,6 +119,34 @@ impl Chip8 {
             Ret => {
                 self.pc = self.stack[self.sp - 1];
                 self.sp -= 1;
+            }
+
+            Scr => {
+                let screen = self.screen.clone();
+                for (y, mut row) in self.screen.outer_iter_mut().enumerate() {
+                    for (x, elem) in row.iter_mut().enumerate() {
+                        let mut tmp = screen[(y, x)] >> 4;
+                        if x > 0 {
+                            tmp |= screen[(y, x - 1)] << 4;
+                        }
+                        *elem = tmp
+                    }
+                }
+                self.pc += 2;
+            }
+            Scl => {
+                let screen = self.screen.clone();
+                let (_, ncols) = self.screen.dim();
+                for (y, mut row) in self.screen.outer_iter_mut().enumerate() {
+                    for (x, elem) in row.iter_mut().enumerate() {
+                        let mut tmp = screen[(y, x)] << 4;
+                        if x < ncols - 1 {
+                            tmp |= screen[(y, x + 1)] >> 4;
+                        }
+                        *elem = tmp
+                    }
+                }
+                self.pc += 2;
             }
             Exit => {
                 self.exit = true;
@@ -336,7 +393,7 @@ impl Chip8 {
                 self.pc += 2;
             }
             Unknown(x) => {
-                //panic!("Unkown opcode: {x:#05X}");
+                panic!("Unkown opcode: {x:#05X}");
             }
         }
     }
