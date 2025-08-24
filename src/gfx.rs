@@ -147,7 +147,7 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
     let main_area = frame.area();
 
     let [left_area, right_area] = Layout::horizontal([
-        Constraint::Length((64 * chip.resolution.factor() as u16) + 2),
+        Constraint::Length((64 * chip.resolution.factor() as u16) + 4),
         Constraint::Percentage(60),
     ])
     .areas(main_area);
@@ -172,13 +172,13 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
             for bit in 0..8 {
                 if let Some(cell) = buf.cell_mut((x_buf + (8 - bit), y_buf)) {
                     cell.set_symbol("▀");
-                    cell.set_fg(Color::Rgb(0, 0, 0));
-                    cell.set_bg(Color::Rgb(0, 0, 0));
+                    cell.set_fg(Color::Rgb(10, 40, 10));
+                    cell.set_bg(Color::Rgb(10, 30, 10));
                     if fg & 0x1 == 0x1 {
-                        cell.set_fg(Color::Blue);
+                        cell.set_fg(Color::Rgb(40, 255, 40));
                     }
                     if bg & 0x1 == 0x1 {
-                        cell.set_bg(Color::Blue);
+                        cell.set_bg(Color::Rgb(40, 200, 40));
                     }
                 }
                 fg >>= 1;
