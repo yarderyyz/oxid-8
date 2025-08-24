@@ -18,6 +18,15 @@ pub enum Resolution {
     High,
 }
 
+impl Resolution {
+    pub fn factor(&self) -> usize {
+        match self {
+            Resolution::High => 2,
+            Resolution::Low => 1,
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 pub enum KeyState {
     #[default]
