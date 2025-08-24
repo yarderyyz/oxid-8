@@ -4,6 +4,7 @@ use std::fmt;
 pub enum ChipOp {
     Cls,
     Ret,
+    Exit,
     LowRes,
     HighRes,
     JpNnn { nnn: usize },
@@ -47,6 +48,7 @@ impl fmt::Debug for ChipOp {
         let name = match self {
             Cls => "Cls",
             Ret => "Ret",
+            Exit => "Ret",
             LowRes => "HighRes",
             HighRes => "LowRes",
             JpNnn { .. } => "JpNnn",
@@ -93,8 +95,9 @@ impl fmt::Display for ChipOp {
         match *self {
             Cls => write!(f, "CLS"),
             Ret => write!(f, "RET"),
-            LowRes => write!(f, "HighRes"),
-            HighRes => write!(f, "LowRes"),
+            Exit => write!(f, "EXIT"),
+            LowRes => write!(f, "HIGH"),
+            HighRes => write!(f, "LOW"),
             JpNnn { nnn } => write!(f, "JP {nnn:#05X}"),
             CallNnn { nnn } => write!(f, "CALL {nnn:#05X}"),
             SeVxNn { x, nn } => write!(f, "SE V{x:X}, {nn:#04X}"),

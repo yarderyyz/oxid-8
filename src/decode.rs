@@ -5,6 +5,7 @@ pub fn decode(op: u16) -> ChipOp {
         0x0000 => match op {
             0x00E0 => ChipOp::Cls,
             0x00EE => ChipOp::Ret,
+            0x00FD => ChipOp::Exit,
             0x00FE => ChipOp::LowRes,
             0x00FF => ChipOp::HighRes,
             _ => ChipOp::Unknown(op),
@@ -23,9 +24,12 @@ pub fn decode(op: u16) -> ChipOp {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
         },
-        0x5000 => ChipOp::SeVxVy {
-            x: ((op & 0x0F00) >> 8) as usize,
-            y: ((op & 0x00F0) >> 4) as usize,
+        0x5000 => match op & 0x000F {
+            0x0000 => ChipOp::SeVxVy {
+                x: ((op & 0x0F00) >> 8) as usize,
+                y: ((op & 0x00F0) >> 4) as usize,
+            },
+            _ => ChipOp::Unknown(op),
         },
         0x6000 => ChipOp::LdVxNn {
             x: ((op & 0x0F00) >> 8) as usize,

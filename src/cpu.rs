@@ -51,6 +51,7 @@ pub struct Chip8 {
     pub resolution: Resolution,
     pub key_state: KeyState,
     pub last_key: u8,
+    pub exit: bool,
 }
 
 impl Chip8 {
@@ -89,6 +90,9 @@ impl Chip8 {
             Ret => {
                 self.pc = self.stack[self.sp - 1];
                 self.sp -= 1;
+            }
+            Exit => {
+                self.exit = true;
             }
             LowRes => {
                 self.resolution = Resolution::Low;
@@ -332,7 +336,7 @@ impl Chip8 {
                 self.pc += 2;
             }
             Unknown(x) => {
-                panic!("Unkown opcode: {x:#05X}");
+                //panic!("Unkown opcode: {x:#05X}");
             }
         }
     }

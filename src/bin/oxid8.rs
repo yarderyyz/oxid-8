@@ -113,6 +113,9 @@ fn main() -> color_eyre::Result<()> {
 
     while model.running_state.load(Ordering::Acquire) != RunningState::Done {
         chip.run_step();
+        if chip.exit {
+            break;
+        }
 
         {
             let mut send_handle = buf_tx.write();
