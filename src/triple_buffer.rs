@@ -114,7 +114,7 @@ use std::{
 /// separate threads, but each half is `!Sync` and cannot be shared between threads
 /// without external synchronization. Only one writer and one reader are supported.
 ///
-/// The type `T` must implement [`Copy`] as this constructor initializes all three
+/// The type `T` must implement [`Clone`] as this constructor initializes all three
 /// internal buffers with copies of the provided `initial` value.
 ///
 /// # Examples
@@ -148,7 +148,7 @@ use std::{
 ///
 /// [`TripleBufferWriter`]: struct.TripleBufferWriter.html
 /// [`TripleBufferReader`]: struct.TripleBufferReader.html
-pub fn triple_buffer<T: Copy>(initial: T) -> (TripleBufferWriter<T>, TripleBufferReader<T>) {
+pub fn triple_buffer<T: Clone>(initial: T) -> (TripleBufferWriter<T>, TripleBufferReader<T>) {
     let buffer = Arc::new(TripleBuffer::new(initial));
 
     let writer = TripleBufferWriter {
@@ -323,7 +323,7 @@ pub struct TripleBuffer<T> {
 ///   - The atomic state prevents data races between reader and writer
 unsafe impl<T: Send> Send for TripleBuffer<T> {}
 
-impl<T: Copy> TripleBuffer<T> {
+impl<T: Clone> TripleBuffer<T> {
     /// Creates a new triple buffer initialized with the given value.
     ///
     /// All three internal buffers are initialized to copies of `initial`.
@@ -348,9 +348,9 @@ impl<T: Copy> TripleBuffer<T> {
         let encoded_state = BufferState::encode(&BufferState::new());
         Self {
             buffers: [
-                UnsafeCell::new(initial),
-                UnsafeCell::new(initial),
-                UnsafeCell::new(initial),
+                UnsafeCell::new(initial.clone()),
+                UnsafeCell::new(initial.clone()),
+                UnsafeCell::new(initial.clone()),
             ],
             encoded_state: encoded_state.into(),
         }
