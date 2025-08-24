@@ -1,5 +1,7 @@
 use std::sync::atomic::Ordering;
 
+use random_number::random;
+
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::Span;
@@ -143,6 +145,14 @@ pub fn render_chip8_debug(f: &mut Frame, area: Rect, c8: &Chip8) {
     f.render_widget(cmd_table, chunks[2]);
 }
 
+fn fuzz(rgb: (i16, i16, i16)) -> Color {
+    Color::Rgb(
+        ((rgb.0 + random!(-3..=1)) % 255) as u8,
+        ((rgb.1 + random!(-3..=1)) % 255) as u8,
+        ((rgb.2 + random!(-3..=1)) % 255) as u8,
+    )
+}
+
 pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
     let main_area = frame.area();
 
@@ -172,13 +182,13 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
             for bit in 0..8 {
                 if let Some(cell) = buf.cell_mut((x_buf + (8 - bit), y_buf)) {
                     cell.set_symbol("▀");
-                    cell.set_fg(Color::Rgb(10, 40, 10));
-                    cell.set_bg(Color::Rgb(10, 30, 10));
+                    cell.set_fg(fuzz((10, 40, 10)));
+                    cell.set_bg(fuzz((10, 30, 10)));
                     if fg & 0x1 == 0x1 {
-                        cell.set_fg(Color::Rgb(40, 255, 40));
+                        cell.set_fg(fuzz((40, 240, 40)));
                     }
                     if bg & 0x1 == 0x1 {
-                        cell.set_bg(Color::Rgb(40, 200, 40));
+                        cell.set_bg(fuzz((40, 180, 40)));
                     }
                 }
                 fg >>= 1;
