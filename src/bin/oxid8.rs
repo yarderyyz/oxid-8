@@ -128,6 +128,7 @@ fn main() -> color_eyre::Result<()> {
                 *send_handle = chip.clone(); // must clone here as screen is causal
             } else {
                 send_handle.screen = chip.screen.clone(); // must clone here as screen is causal
+                send_handle.resolution = chip.resolution;
             }
         }
 

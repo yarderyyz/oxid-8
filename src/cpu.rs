@@ -11,7 +11,7 @@ use std::sync::{
 
 use crate::consts::{CHIP8_FONTSET, H, W};
 
-#[derive(Default, Clone)]
+#[derive(Default, Copy, Clone)]
 pub enum Resolution {
     #[default]
     Low,
@@ -187,6 +187,22 @@ impl Chip8 {
                 } else {
                     self.pc += 2;
                 }
+            }
+            LdVxVyI { x, y } => {
+                if y < x {
+                    panic!("LdVxVyI: VY must be a higher register than VX");
+                }
+                let range_end = self.i + y - x;
+                let mem_range = self.i..=range_end;
+                self.memory[mem_range].copy_from_slice(&self.v[x..=y]);
+            }
+            LdIVxVy { x, y } => {
+                if y < x {
+                    panic!("LdVxVyI: VY must be a higher register than VX");
+                }
+                let range_end = self.i + y - x;
+                let mem_range = self.i..=range_end;
+                self.v[x..=y].copy_from_slice(&self.memory[mem_range]);
             }
             LdVxNn { x, nn } => {
                 *self.vx(x) = nn;
@@ -494,6 +510,43 @@ mod tests {
 
         chip.exec(ChipOp::SeVxVy { x: 0, y: 1 });
         assert!(chip.pc == 0x202);
+    }
+
+    #[test]
+    fn test_exec_ld_vx_vy_i() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 20;
+        chip.v[1] = 17;
+        chip.v[2] = 12;
+        chip.v[3] = 42;
+        chip.v[4] = 0xBF;
+        chip.i = 0x400;
+
+        chip.exec(ChipOp::LdVxVyI { x: 0, y: 3 });
+        assert!(chip.memory[0x400] == 20);
+        assert!(chip.memory[0x401] == 17);
+        assert!(chip.memory[0x402] == 12);
+        assert!(chip.memory[0x403] == 42);
+        assert!(chip.memory[0x404] != 0xBF);
+    }
+
+    #[test]
+    fn test_exec_ld_i_vx_vy() {
+        let mut chip = Chip8::new();
+        chip.memory[0x400] = 20;
+        chip.memory[0x401] = 17;
+        chip.memory[0x402] = 12;
+        chip.memory[0x403] = 42;
+        chip.memory[0x404] = 0xBF;
+        chip.i = 0x400;
+
+        chip.exec(ChipOp::LdIVxVy { x: 0, y: 3 });
+
+        assert!(chip.v[0] == 20);
+        assert!(chip.v[1] == 17);
+        assert!(chip.v[2] == 12);
+        assert!(chip.v[3] == 42);
+        assert!(chip.v[4] != 0xBF);
     }
 
     #[test]

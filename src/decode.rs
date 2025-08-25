@@ -39,13 +39,16 @@ pub fn decode(op: u16) -> ChipOp {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
         },
-        0x5000 => match op & 0x000F {
-            0x0000 => ChipOp::SeVxVy {
-                x: ((op & 0x0F00) >> 8) as usize,
-                y: ((op & 0x00F0) >> 4) as usize,
-            },
-            _ => ChipOp::Unknown(op),
-        },
+        0x5000 => {
+            let x = ((op & 0x0F00) >> 8) as usize;
+            let y = ((op & 0x00F0) >> 4) as usize;
+            match op & 0x000F {
+                0x0000 => ChipOp::SeVxVy { x, y },
+                0x0002 => ChipOp::LdIVxVy { x, y },
+                0x0003 => ChipOp::LdVxVyI { x, y },
+                _ => ChipOp::Unknown(op),
+            }
+        }
         0x6000 => ChipOp::LdVxNn {
             x: ((op & 0x0F00) >> 8) as usize,
             nn: (op & 0x00FF) as u8,
