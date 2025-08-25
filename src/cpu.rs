@@ -686,4 +686,420 @@ mod tests {
 
         assert_eq!(chip.screen.iter().sum::<u8>(), 0);
     }
+
+    #[test]
+    fn test_exec_or_vx_vy() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0b10101010;
+        chip.v[1] = 0b01010101;
+
+        chip.exec(ChipOp::OrVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 0b11111111);
+    }
+
+    #[test]
+    fn test_exec_and_vx_vy() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0b11110000;
+        chip.v[1] = 0b10101010;
+
+        chip.exec(ChipOp::AndVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 0b10100000);
+    }
+
+    #[test]
+    fn test_exec_xor_vx_vy() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0b11110000;
+        chip.v[1] = 0b10101010;
+
+        chip.exec(ChipOp::XorVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 0b01011010);
+    }
+
+    #[test]
+    fn test_exec_add_vx_vy_no_carry() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 50;
+        chip.v[1] = 100;
+
+        chip.exec(ChipOp::AddVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 150);
+        assert_eq!(chip.v[0xF], 0);
+    }
+
+    #[test]
+    fn test_exec_add_vx_vy_with_carry() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 200;
+        chip.v[1] = 100;
+
+        chip.exec(ChipOp::AddVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 44); // 300 & 0xFF
+        assert_eq!(chip.v[0xF], 1);
+    }
+
+    #[test]
+    fn test_exec_sub_vx_vy_no_borrow() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 100;
+        chip.v[1] = 50;
+
+        chip.exec(ChipOp::SubVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 50);
+        assert_eq!(chip.v[0xF], 1);
+    }
+
+    #[test]
+    fn test_exec_sub_vx_vy_with_borrow() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 50;
+        chip.v[1] = 100;
+
+        chip.exec(ChipOp::SubVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 206); // wrapping sub
+        assert_eq!(chip.v[0xF], 0);
+    }
+
+    #[test]
+    fn test_exec_shr_vx_vy() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0b10101011;
+
+        chip.exec(ChipOp::ShrVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 0b01010101);
+        assert_eq!(chip.v[0xF], 1);
+    }
+
+    #[test]
+    fn test_exec_subn_vx_vy_no_borrow() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 50;
+        chip.v[1] = 100;
+
+        chip.exec(ChipOp::SubnVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 50);
+        assert_eq!(chip.v[0xF], 1);
+    }
+
+    #[test]
+    fn test_exec_subn_vx_vy_with_borrow() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 100;
+        chip.v[1] = 50;
+
+        chip.exec(ChipOp::SubnVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 206); // wrapping sub
+        assert_eq!(chip.v[0xF], 0);
+    }
+
+    #[test]
+    fn test_exec_shl_vx_vy() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0b10101011;
+
+        chip.exec(ChipOp::ShlVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 0b01010110);
+        assert_eq!(chip.v[0xF], 1);
+    }
+
+    #[test]
+    fn test_exec_sne_vx_vy_skip() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 20;
+        chip.v[1] = 30;
+
+        chip.exec(ChipOp::SneVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x204);
+    }
+
+    #[test]
+    fn test_exec_sne_vx_vy_no_skip() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 20;
+        chip.v[1] = 20;
+
+        chip.exec(ChipOp::SneVxVy { x: 0, y: 1 });
+        assert_eq!(chip.pc, 0x202);
+    }
+
+    #[test]
+    fn test_exec_ld_i_nnn() {
+        let mut chip = Chip8::new();
+
+        chip.exec(ChipOp::LdINnn { nnn: 0x400 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.i, 0x400);
+    }
+
+    #[test]
+    fn test_exec_jp_v0_nnn() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0x10;
+
+        chip.exec(ChipOp::JpV0Nnn { nnn: 0x300 });
+        assert_eq!(chip.pc, 0x310);
+    }
+
+    #[test]
+    fn test_exec_rnd_vx_nn() {
+        let mut chip = Chip8::new();
+
+        chip.exec(ChipOp::RndVxNn { x: 0, nn: 0x0F });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0] & 0xF0, 0);
+    }
+
+    #[test]
+    fn test_exec_skp_vx_pressed() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 5;
+        chip.keys[5] = true;
+
+        chip.exec(ChipOp::SkpVx { x: 0 });
+        assert_eq!(chip.pc, 0x204);
+    }
+
+    #[test]
+    fn test_exec_skp_vx_not_pressed() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 5;
+        chip.keys[5] = false;
+
+        chip.exec(ChipOp::SkpVx { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+    }
+
+    #[test]
+    fn test_exec_sknp_vx_not_pressed() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 5;
+        chip.keys[5] = false;
+
+        chip.exec(ChipOp::SknpVx { x: 0 });
+        assert_eq!(chip.pc, 0x204);
+    }
+
+    #[test]
+    fn test_exec_sknp_vx_pressed() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 5;
+        chip.keys[5] = true;
+
+        chip.exec(ChipOp::SknpVx { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+    }
+
+    #[test]
+    fn test_exec_ld_vx_dt() {
+        let mut chip = Chip8::new();
+        chip.dt.store(42, Ordering::Release);
+
+        chip.exec(ChipOp::LdVxDt { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 42);
+    }
+
+    #[test]
+    fn test_exec_ld_dt_vx() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 42;
+
+        chip.exec(ChipOp::LdDtVx { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.dt.load(Ordering::Acquire), 42);
+    }
+
+    #[test]
+    fn test_exec_ld_st_vx() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 42;
+
+        chip.exec(ChipOp::LdStVx { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.st.load(Ordering::Acquire), 42);
+    }
+
+    #[test]
+    fn test_exec_add_i_vx() {
+        let mut chip = Chip8::new();
+        chip.i = 0x300;
+        chip.v[0] = 0x10;
+
+        chip.exec(ChipOp::AddIVx { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.i, 0x310);
+    }
+
+    #[test]
+    fn test_exec_ld_f_vx() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0xA;
+
+        chip.exec(ChipOp::LdFVx { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.i, 50); // 0xA * 5
+    }
+
+    #[test]
+    fn test_exec_ld_b_vx() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 123;
+        chip.i = 0x300;
+
+        chip.exec(ChipOp::LdBVx { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.memory[0x300], 1);
+        assert_eq!(chip.memory[0x301], 2);
+        assert_eq!(chip.memory[0x302], 3);
+    }
+
+    #[test]
+    fn test_exec_ld_i_vx() {
+        let mut chip = Chip8::new();
+        chip.v[0] = 0xAB;
+        chip.v[1] = 0xCD;
+        chip.v[2] = 0xEF;
+        chip.i = 0x300;
+
+        chip.exec(ChipOp::LdIVx { x: 2 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.memory[0x300], 0xAB);
+        assert_eq!(chip.memory[0x301], 0xCD);
+        assert_eq!(chip.memory[0x302], 0xEF);
+        assert_eq!(chip.i, 0x303);
+    }
+
+    #[test]
+    fn test_exec_ld_vx_i() {
+        let mut chip = Chip8::new();
+        chip.i = 0x300;
+        chip.memory[0x300] = 0xAB;
+        chip.memory[0x301] = 0xCD;
+        chip.memory[0x302] = 0xEF;
+
+        chip.exec(ChipOp::LdVxI { x: 2 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.v[0], 0xAB);
+        assert_eq!(chip.v[1], 0xCD);
+        assert_eq!(chip.v[2], 0xEF);
+        assert_eq!(chip.i, 0x303);
+    }
+
+    #[test]
+    fn test_exec_scd_n() {
+        let mut chip = Chip8::new();
+        chip.screen[(0, 0)] = 0xFF;
+        chip.screen[(1, 0)] = 0xAA;
+        chip.screen[(2, 0)] = 0x55;
+
+        chip.exec(ChipOp::ScdN { n: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.screen[(0, 0)], 0);
+        assert_eq!(chip.screen[(1, 0)], 0xFF);
+        assert_eq!(chip.screen[(2, 0)], 0xAA);
+    }
+
+    #[test]
+    fn test_exec_scu_n() {
+        let mut chip = Chip8::new();
+        chip.screen[(0, 0)] = 0xFF;
+        chip.screen[(1, 0)] = 0xAA;
+        chip.screen[(2, 0)] = 0x55;
+
+        chip.exec(ChipOp::ScuN { n: 1 });
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.screen[(0, 0)], 0xAA);
+        assert_eq!(chip.screen[(1, 0)], 0x55);
+        assert_eq!(chip.screen[(2, 0)], 0);
+    }
+
+    #[test]
+    fn test_exec_scr() {
+        let mut chip = Chip8::new();
+        chip.screen[(0, 0)] = 0b11110000;
+        chip.screen[(0, 1)] = 0b10101010;
+
+        chip.exec(ChipOp::Scr);
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.screen[(0, 0)], 0b00001111);
+        assert_eq!(chip.screen[(0, 1)], 0b00001010);
+    }
+
+    #[test]
+    fn test_exec_scl() {
+        let mut chip = Chip8::new();
+        chip.screen[(0, 0)] = 0b11110000;
+        chip.screen[(0, 1)] = 0b10101010;
+
+        chip.exec(ChipOp::Scl);
+        assert_eq!(chip.pc, 0x202);
+        assert_eq!(chip.screen[(0, 0)], 0b00001010);
+        assert_eq!(chip.screen[(0, 1)], 0b10100000);
+    }
+
+    #[test]
+    fn test_exec_exit() {
+        let mut chip = Chip8::new();
+        assert!(!chip.exit);
+
+        chip.exec(ChipOp::Exit);
+        assert!(chip.exit);
+    }
+
+    #[test]
+    fn test_exec_low_res() {
+        let mut chip = Chip8::new();
+        chip.resolution = Resolution::High;
+
+        chip.exec(ChipOp::LowRes);
+        assert_eq!(chip.pc, 0x202);
+        assert!(matches!(chip.resolution, Resolution::Low));
+    }
+
+    #[test]
+    fn test_exec_high_res() {
+        let mut chip = Chip8::new();
+        chip.resolution = Resolution::Low;
+
+        chip.exec(ChipOp::HighRes);
+        assert_eq!(chip.pc, 0x202);
+        assert!(matches!(chip.resolution, Resolution::High));
+    }
+
+    #[test]
+    fn test_exec_ld_vx_k_awaiting_press() {
+        let mut chip = Chip8::new();
+        chip.key_state = KeyState::AwaitingPress;
+        chip.keys[5] = true;
+
+        chip.exec(ChipOp::LdVxK { x: 0 });
+        assert_eq!(chip.pc, 0x200); // PC not incremented yet
+        assert!(matches!(chip.key_state, KeyState::AwaitingRelease));
+        assert_eq!(chip.last_key, 5);
+    }
+
+    #[test]
+    fn test_exec_ld_vx_k_awaiting_release() {
+        let mut chip = Chip8::new();
+        chip.key_state = KeyState::AwaitingRelease;
+        chip.last_key = 5;
+        chip.keys.fill(false); // All keys released
+
+        chip.exec(ChipOp::LdVxK { x: 0 });
+        assert_eq!(chip.pc, 0x202);
+        assert!(matches!(chip.key_state, KeyState::AwaitingPress));
+        assert_eq!(chip.v[0], 5);
+    }
 }
