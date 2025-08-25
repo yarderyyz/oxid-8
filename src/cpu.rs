@@ -72,8 +72,8 @@ impl Chip8 {
     pub fn release_key(&mut self, key: u8) {
         self.keys[key as usize] = false;
     }
-    pub fn run_step(&mut self) {
-        for _ in 0..8 {
+    pub fn run_step(&mut self, cycles: u64) {
+        for _ in 0..cycles {
             let b = self.memory[self.pc];
             let s = self.memory[self.pc + 1];
             let op = decode(u16::from_be_bytes([b, s]));

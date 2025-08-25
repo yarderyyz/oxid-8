@@ -24,6 +24,10 @@ struct Args {
     rom: String,
     #[arg(short, long)]
     debug: bool,
+    #[arg(short, long, default_value_t = 12)]
+    cpu_cycles: u64,
+    #[arg(short, long, default_value_t = 60)]
+    cpu_hz: u64,
 }
 
 fn load_rom(filename: &str, memory: &mut [u8]) -> io::Result<()> {
@@ -111,15 +115,20 @@ fn main() -> color_eyre::Result<()> {
         }
     });
 
+    let cpu_millis = 1000 / args.cpu_hz;
     while model.running_state.load(Ordering::Acquire) != RunningState::Done {
-        chip.run_step();
+        chip.run_step(args.cpu_cycles);
         if chip.exit {
             break;
         }
 
         {
             let mut send_handle = buf_tx.write();
-            *send_handle = chip.clone(); // must clone here as screen is causal
+            if args.debug {
+                *send_handle = chip.clone(); // must clone here as screen is causal
+            } else {
+                send_handle.screen = chip.screen.clone(); // must clone here as screen is causal
+            }
         }
 
         // Run input
@@ -137,7 +146,7 @@ fn main() -> color_eyre::Result<()> {
             beeper.set(on);
         }
 
-        thread::sleep(Duration::from_millis(2)); // 500 Hz
+        thread::sleep(Duration::from_millis(cpu_millis));
     }
 
     let _ = render_join_handle.join();

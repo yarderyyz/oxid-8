@@ -185,10 +185,10 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
                     cell.set_fg(fuzz((10, 40, 10)));
                     cell.set_bg(fuzz((10, 30, 10)));
                     if fg & 0x1 == 0x1 {
-                        cell.set_fg(fuzz((40, 240, 40)));
+                        cell.set_fg(fuzz((40, 220, 40)));
                     }
                     if bg & 0x1 == 0x1 {
-                        cell.set_bg(fuzz((40, 180, 40)));
+                        cell.set_bg(fuzz((40, 190, 40)));
                     }
                 }
                 fg >>= 1;
