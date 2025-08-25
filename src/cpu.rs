@@ -237,10 +237,10 @@ impl Chip8 {
                 self.v[0xF] = !overflow as u8;
                 self.pc += 2;
             }
-            ShrVxVy { x, .. } => {
-                let vx = *self.vx(x);
-                *self.vx(x) = vx >> 1;
-                self.v[0xF] = vx & 0x1;
+            ShrVxVy { x, y } => {
+                let vy = *self.vx(y);
+                *self.vx(x) = vy >> 1;
+                self.v[0xF] = vy & 0x1;
                 self.pc += 2;
             }
             SubnVxVy { x, y } => {
@@ -251,10 +251,10 @@ impl Chip8 {
                 self.v[0xF] = !overflow as u8;
                 self.pc += 2;
             }
-            ShlVxVy { x, .. } => {
-                let vx = *self.vx(x);
-                *self.vx(x) = vx << 1;
-                self.v[0xF] = vx >> 7;
+            ShlVxVy { x, y } => {
+                let vy = *self.vx(y);
+                *self.vx(x) = vy << 1;
+                self.v[0xF] = vy >> 7;
                 self.pc += 2;
             }
             SneVxVy { x, y } => {
@@ -423,7 +423,7 @@ mod tests {
 
     #[test]
     fn test_exec_jp() {
-        let pc = 0x200;
+        let pc = 0x400;
         let mut chip: Chip8 = Default::default();
         let op = ChipOp::JpNnn { nnn: pc };
         chip.exec(op);
@@ -771,7 +771,7 @@ mod tests {
     #[test]
     fn test_exec_shr_vx_vy() {
         let mut chip = Chip8::new();
-        chip.v[0] = 0b10101011;
+        chip.v[1] = 0b10101011;
 
         chip.exec(ChipOp::ShrVxVy { x: 0, y: 1 });
         assert_eq!(chip.pc, 0x202);
@@ -806,7 +806,7 @@ mod tests {
     #[test]
     fn test_exec_shl_vx_vy() {
         let mut chip = Chip8::new();
-        chip.v[0] = 0b10101011;
+        chip.v[1] = 0b10101011;
 
         chip.exec(ChipOp::ShlVxVy { x: 0, y: 1 });
         assert_eq!(chip.pc, 0x202);
