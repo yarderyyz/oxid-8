@@ -42,7 +42,7 @@
 //! Basic usage with different sampling rates:
 //!
 //! ```rust
-//! use oxid8::triple_buffer::triple_buffer;
+//! use oxid8::utils::triple_buffer::triple_buffer;
 //! use std::thread;
 //! use std::time::Duration;
 //!
@@ -120,7 +120,7 @@ use std::{
 /// # Examples
 ///
 /// ```rust
-/// use oxid8::triple_buffer::triple_buffer;
+/// use oxid8::utils::triple_buffer::triple_buffer;
 /// use std::thread;
 /// use std::time::Duration;
 ///
@@ -300,7 +300,7 @@ impl BufferState {
 /// function to create a writer/reader pair:
 ///
 /// ```rust
-/// use oxid8::triple_buffer::triple_buffer;
+/// use oxid8::utils::triple_buffer::triple_buffer;
 ///
 /// let (mut writer, reader) = triple_buffer::<[u64; 32]>(Default::default());
 /// ```
@@ -497,7 +497,7 @@ impl<T> TripleBuffer<T> {
 /// # Usage
 ///
 /// ```rust
-/// use oxid8::triple_buffer::triple_buffer;
+/// use oxid8::utils::triple_buffer::triple_buffer;
 ///
 /// let (mut writer, reader) = triple_buffer(0i32);
 ///
@@ -544,7 +544,7 @@ impl<T> TripleBufferWriter<T> {
     /// # Example
     ///
     /// ```rust
-    /// use oxid8::triple_buffer::triple_buffer;
+    /// use oxid8::utils::triple_buffer::triple_buffer;
     ///
     /// let (mut writer, reader) = triple_buffer(0i32);
     /// let mut write_guard = writer.write();
@@ -595,7 +595,7 @@ impl<T> TripleBufferWriter<T> {
 /// # Usage
 ///
 /// ```rust
-/// use oxid8::triple_buffer::triple_buffer;
+/// use oxid8::utils::triple_buffer::triple_buffer;
 ///
 /// let (writer, reader) = triple_buffer(0i32);
 ///
@@ -652,7 +652,7 @@ impl<T> TripleBufferReader<T> {
     /// # Example
     ///
     /// ```rust
-    /// use oxid8::triple_buffer::triple_buffer;
+    /// use oxid8::utils::triple_buffer::triple_buffer;
     ///
     /// let (writer, reader) = triple_buffer(0i32);
     ///
