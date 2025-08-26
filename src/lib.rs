@@ -12,3 +12,7 @@ pub mod chip8 {
 pub mod utils {
     pub mod triple_buffer;
 }
+
+pub mod compiler {
+    pub mod lex;
+}
