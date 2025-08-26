@@ -1,15 +1,15 @@
 use ndarray::Array2;
 use random_number::random;
 
-use crate::mem::Memory;
-use crate::op::ChipOp;
-use crate::{consts::PROGRAM_START, decode::decode};
+use crate::chip8::mem::Memory;
+use crate::chip8::op::ChipOp;
+use crate::chip8::{consts::PROGRAM_START, decode::decode};
 use std::sync::{
     atomic::{AtomicU8, Ordering},
     Arc,
 };
 
-use crate::consts::{CHIP8_FONTSET, H, W};
+use crate::chip8::consts::{CHIP8_FONTSET, H, W};
 
 #[derive(Default, Copy, Clone)]
 pub enum Resolution {
@@ -515,14 +515,14 @@ mod tests {
     #[test]
     fn test_exec_ld_vx_vy_i() {
         let mut chip = Chip8::new();
-        chip.v[0] = 20;
-        chip.v[1] = 17;
-        chip.v[2] = 12;
-        chip.v[3] = 42;
-        chip.v[4] = 0xBF;
+        chip.v[2] = 20;
+        chip.v[3] = 17;
+        chip.v[4] = 12;
+        chip.v[5] = 42;
+        chip.v[6] = 0xBF;
         chip.i = 0x400;
 
-        chip.exec(ChipOp::LdVxVyI { x: 0, y: 3 });
+        chip.exec(ChipOp::LdVxVyI { x: 2, y: 5 });
         assert!(chip.memory[0x400] == 20);
         assert!(chip.memory[0x401] == 17);
         assert!(chip.memory[0x402] == 12);
@@ -533,16 +533,16 @@ mod tests {
     #[test]
     fn test_exec_ld_i_vx_vy() {
         let mut chip = Chip8::new();
-        chip.memory[0x400] = 20;
+        chip.memory[0x400] = 0xBF;
         chip.memory[0x401] = 17;
         chip.memory[0x402] = 12;
         chip.memory[0x403] = 42;
         chip.memory[0x404] = 0xBF;
-        chip.i = 0x400;
+        chip.i = 0x401;
 
-        chip.exec(ChipOp::LdIVxVy { x: 0, y: 3 });
+        chip.exec(ChipOp::LdIVxVy { x: 1, y: 3 });
 
-        assert!(chip.v[0] == 20);
+        assert!(chip.v[0] != 0xBF);
         assert!(chip.v[1] == 17);
         assert!(chip.v[2] == 12);
         assert!(chip.v[3] == 42);

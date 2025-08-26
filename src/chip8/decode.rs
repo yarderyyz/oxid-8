@@ -1,4 +1,4 @@
-use crate::op::ChipOp;
+use crate::chip8::op::ChipOp;
 
 pub fn decode(op: u16) -> ChipOp {
     match op & 0xF000 {

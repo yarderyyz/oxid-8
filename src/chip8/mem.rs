@@ -1,4 +1,4 @@
-use crate::consts::RAM_SIZE;
+use crate::chip8::consts::RAM_SIZE;
 
 #[derive(Clone)]
 pub struct Memory(pub [u8; RAM_SIZE]);
