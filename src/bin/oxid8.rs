@@ -14,8 +14,8 @@ use std::time::Duration;
 use oxid8::chip8::audio::Beeper;
 use oxid8::chip8::consts::{PROGRAM_START, RAM_SIZE};
 use oxid8::chip8::cpu::Chip8;
-use oxid8::utils::triple_buffer;
 use oxid8::chip8::{gfx, timers};
+use oxid8::utils::triple_buffer;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
