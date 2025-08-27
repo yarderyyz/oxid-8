@@ -182,13 +182,13 @@ pub fn view(chip: &Chip8, frame: &mut Frame, debug: bool) {
             for bit in 0..8 {
                 if let Some(cell) = buf.cell_mut((x_buf + (8 - bit), y_buf)) {
                     cell.set_symbol("▀");
-                    cell.set_fg(fuzz((10, 40, 10)));
-                    cell.set_bg(fuzz((10, 30, 10)));
+                    cell.set_fg(fuzz((10, 25, 20)));
+                    cell.set_bg(fuzz((5, 24, 18)));
                     if fg & 0x1 == 0x1 {
-                        cell.set_fg(fuzz((40, 220, 40)));
+                        cell.set_fg(fuzz((3, 220, 135)));
                     }
                     if bg & 0x1 == 0x1 {
-                        cell.set_bg(fuzz((40, 190, 40)));
+                        cell.set_bg(fuzz((3, 180, 96)));
                     }
                 }
                 fg >>= 1;
